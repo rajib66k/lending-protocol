@@ -93,6 +93,28 @@ library Math {
     }
 
     /**
+     * @notice Executes a percentage division
+     * @param value The value to be divided
+     * @param percentage The percentage divisor
+     * @return result value divided by percentage
+     */
+    function percentageDiv(uint256 value, uint256 percentage) internal pure returns (uint256) {
+        if (value == 0) {
+            return 0;
+        }
+
+        if (percentage == 0) {
+            revert Math__DivisionByZero();
+        }
+
+        if (value > (type(uint256).max - (percentage / 2)) / PERCENTAGE_FACTOR) {
+            revert Math__MathOverflow();
+        }
+
+        return (value * PERCENTAGE_FACTOR + (percentage / 2)) / percentage;
+    }
+
+    /**
      * @dev Function to calculate the interest accumulated using a linear interest rate formula
      * @param rate The interest rate, in ray
      * @param lastUpdateTimestamp The timestamp of the last update of the interest
