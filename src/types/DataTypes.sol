@@ -77,7 +77,7 @@ library DataTypes {
         uint8 tokenDecimals;
     }
 
-    struct UserData {
+    struct UserConfiguration {
         /**
          * @dev Bitmap of the users collaterals and borrows. It is divided in pairs of bits, one pair per asset.
          * The first bit indicates if an asset is used as collateral by the user, the second whether an
