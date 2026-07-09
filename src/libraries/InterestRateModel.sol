@@ -18,12 +18,12 @@ library InterestRateModel {
      * @param totalDebt Total outstanding borrowed amount.
      * @return The utilization ratio in WAD precision.
      */
-    function calculateUtilization(uint256 totalLiquidityPlusDebt, uint256 totalDebt) public pure returns (uint256) {
+    function calculateUtilization(uint256 totalLiquidityPlusDebt, uint256 totalDebt) internal pure returns (uint256) {
         if (totalLiquidityPlusDebt == 0) {
             return 0;
         }
 
-        return totalDebt.wadDiv(totalLiquidityPlusDebt);
+        return totalDebt.rayDiv(totalLiquidityPlusDebt);
     }
 
     /**
@@ -37,7 +37,7 @@ library InterestRateModel {
         uint256 totalLiquidityPlusDebt,
         uint256 totalDebt,
         DataTypes.InterestRateParams memory interestRateParams
-    ) public pure returns (uint256 borrowRate) {
+    ) internal pure returns (uint256 borrowRate) {
         uint256 utilization = calculateUtilization(totalLiquidityPlusDebt, totalDebt);
 
         borrowRate = _borrowRate(utilization, interestRateParams);
@@ -56,7 +56,7 @@ library InterestRateModel {
         uint256 totalDebt,
         uint16 reserveFactor,
         DataTypes.InterestRateParams memory interestRateParams
-    ) public pure returns (uint256 liquidityRate) {
+    ) internal pure returns (uint256 liquidityRate) {
         uint256 utilization = calculateUtilization(totalLiquidityPlusDebt, totalDebt);
         uint256 borrowRate = _borrowRate(utilization, interestRateParams);
 
@@ -77,7 +77,7 @@ library InterestRateModel {
         uint256 totalDebt,
         uint16 reserveFactor,
         DataTypes.InterestRateParams memory interestRateParams
-    ) external pure returns (uint256 borrowRate, uint256 liquidityRate) {
+    ) internal pure returns (uint256 borrowRate, uint256 liquidityRate) {
         uint256 utilization = calculateUtilization(totalLiquidityPlusDebt, totalDebt);
 
         borrowRate = _borrowRate(utilization, interestRateParams);
