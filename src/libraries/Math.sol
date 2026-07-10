@@ -61,6 +61,34 @@ library Math {
     }
 
     /**
+     * @notice Multiplies two rays, rounding down.
+     * @return (a * b) / RAY
+     */
+    function rayMulFloor(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0 || b == 0) return 0;
+
+        if (a > type(uint256).max / b) {
+            revert Math__MathOverflow();
+        }
+
+        return (a * b) / RAY;
+    }
+
+    /**
+     * @notice Multiplies two rays, rounding up.
+     * @return ceil((a * b) / RAY)
+     */
+    function rayMulCeil(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0 || b == 0) return 0;
+
+        if (a > (type(uint256).max - (RAY - 1)) / b) {
+            revert Math__MathOverflow();
+        }
+
+        return (a * b + RAY - 1) / RAY;
+    }
+
+    /**
      * @notice Divides two rays, rounding half up.
      * @return (a * RAY) / b
      */
@@ -72,6 +100,34 @@ library Math {
         }
 
         return (a * RAY + b / 2) / b;
+    }
+
+    /**
+     * @notice Divides two rays, rounding down.
+     * @return (a * RAY) / b
+     */
+    function rayDivFloor(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (b == 0) revert Math__DivisionByZero();
+
+        if (a > type(uint256).max / RAY) {
+            revert Math__MathOverflow();
+        }
+
+        return (a * RAY) / b;
+    }
+
+    /**
+     * @notice Divides two rays, rounding up.
+     * @return ceil((a * RAY) / b)
+     */
+    function rayDivCeil(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (b == 0) revert Math__DivisionByZero();
+
+        if (a > (type(uint256).max - (b - 1)) / RAY) {
+            revert Math__MathOverflow();
+        }
+
+        return (a * RAY + b - 1) / b;
     }
 
     /**
@@ -90,6 +146,42 @@ library Math {
         }
 
         return (value * percentage + HALF_FACTOR) / PERCENTAGE_FACTOR;
+    }
+
+    /**
+     * @notice Executes a percentage multiplication, rounding down.
+     * @param value The value of which the percentage needs to be calculated
+     * @param percentage The percentage of the value to be calculated
+     * @return result value percentmul percentage rounded down
+     */
+    function percentageMulFloor(uint256 value, uint256 percentage) internal pure returns (uint256) {
+        if (value == 0 || percentage == 0) {
+            return 0;
+        }
+
+        if (value > type(uint256).max / percentage) {
+            revert Math__MathOverflow();
+        }
+
+        return (value * percentage) / PERCENTAGE_FACTOR;
+    }
+
+    /**
+     * @notice Executes a percentage multiplication, rounding up.
+     * @param value The value of which the percentage needs to be calculated
+     * @param percentage The percentage of the value to be calculated
+     * @return result value percentmul percentage rounded up
+     */
+    function percentageMulCeil(uint256 value, uint256 percentage) internal pure returns (uint256) {
+        if (value == 0 || percentage == 0) {
+            return 0;
+        }
+
+        if (value > (type(uint256).max - (PERCENTAGE_FACTOR - 1)) / percentage) {
+            revert Math__MathOverflow();
+        }
+
+        return (value * percentage + PERCENTAGE_FACTOR - 1) / PERCENTAGE_FACTOR;
     }
 
     /**
@@ -112,6 +204,50 @@ library Math {
         }
 
         return (value * PERCENTAGE_FACTOR + (percentage / 2)) / percentage;
+    }
+
+    /**
+     * @notice Executes a percentage division, rounding down.
+     * @param value The value to be divided
+     * @param percentage The percentage divisor
+     * @return result value divided by percentage rounded down
+     */
+    function percentageDivFloor(uint256 value, uint256 percentage) internal pure returns (uint256) {
+        if (value == 0) {
+            return 0;
+        }
+
+        if (percentage == 0) {
+            revert Math__DivisionByZero();
+        }
+
+        if (value > type(uint256).max / PERCENTAGE_FACTOR) {
+            revert Math__MathOverflow();
+        }
+
+        return (value * PERCENTAGE_FACTOR) / percentage;
+    }
+
+    /**
+     * @notice Executes a percentage division, rounding up.
+     * @param value The value to be divided
+     * @param percentage The percentage divisor
+     * @return result value divided by percentage rounded up
+     */
+    function percentageDivCeil(uint256 value, uint256 percentage) internal pure returns (uint256) {
+        if (value == 0) {
+            return 0;
+        }
+
+        if (percentage == 0) {
+            revert Math__DivisionByZero();
+        }
+
+        if (value > (type(uint256).max - (percentage - 1)) / PERCENTAGE_FACTOR) {
+            revert Math__MathOverflow();
+        }
+
+        return (value * PERCENTAGE_FACTOR + percentage - 1) / percentage;
     }
 
     /**
