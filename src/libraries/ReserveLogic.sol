@@ -88,4 +88,77 @@ library ReserveLogic {
 
         reserve.isActive = true;
     }
+
+    /**
+     * @notice Updates the reserve indexes and last update timestamp.
+     * @dev Accrues interest since the last reserve update and updates the liquidity and borrow indexes.
+     *      If the reserve was already updated in the current block, no changes are applied.
+     * @param reserve The reserve data storage object to update.
+     * @param reserveCache The cached reserve data used during the update process.
+     */
+    function updateState(DataTypes.ReserveData storage reserve, DataTypes.ReserveCache memory reserveCache) internal {
+        uint40 timestamp = block.timestamp.toUint40();
+        if (reserveCache.lastUpdate == timestamp) {
+            return;
+        }
+
+        _updateIndexes(reserve, reserveCache);
+
+        reserve.lastUpdate = timestamp;
+        reserveCache.lastUpdate = timestamp;
+    }
+
+    /**
+     * @notice Updates the reserve liquidity and borrow indexes by applying accrued interest.
+     * @dev Calculates linear interest from the last reserve update timestamp and updates the stored indexes.
+     *      If the reserve was already updated in the current block, no update is performed.
+     * @param reserve The reserve data storage object containing the current indexes and rates.
+     * @param reserveCache The cached reserve data used to store the next calculated indexes.
+     */
+    function _updateIndexes(DataTypes.ReserveData storage reserve, DataTypes.ReserveCache memory reserveCache)
+        internal
+    {
+        uint40 timestamp = reserve.lastUpdate;
+
+        // forge-lint: disable-next-line(block-timestamp)
+        if (timestamp == block.timestamp) {
+            return;
+        } else {
+            reserveCache.nextLiquidityIndex =
+                Math.calculateLinearInterest(reserve.currentLiquidityRate, timestamp).rayMul(reserve.liquidityIndex);
+            reserve.liquidityIndex = reserveCache.nextLiquidityIndex.toUint128();
+
+            reserveCache.nextBorrowIndex =
+                Math.calculateLinearInterest(reserve.currentBorrowRate, timestamp).rayMul(reserve.borrowIndex);
+            reserve.borrowIndex = reserveCache.nextBorrowIndex.toUint128();
+        }
+    }
+
+    /**
+     * @notice Creates a cached copy of the reserve data.
+     * @dev Copies frequently accessed reserve parameters into memory.
+     * @param reserve The reserve data storage object to cache.
+     * @return reserveCache A memory copy containing reserve indexes, rates, token addresses, risk parameters,
+     *         activation status, and last update timestamp.
+     */
+    function cache(DataTypes.ReserveData storage reserve) internal view returns (DataTypes.ReserveCache memory) {
+        DataTypes.ReserveCache memory reserveCache;
+
+        reserveCache.liquidityIndex = reserveCache.nextLiquidityIndex = reserve.liquidityIndex;
+        reserveCache.borrowIndex = reserveCache.nextBorrowIndex = reserve.borrowIndex;
+
+        reserveCache.currentLiquidityRate = reserve.currentLiquidityRate;
+        reserveCache.currentBorrowRate = reserve.currentBorrowRate;
+
+        reserveCache.liquidityTokenAddress = reserve.liquidityTokenAddress;
+        reserveCache.debtTokenAddress = reserve.debtTokenAddress;
+
+        reserveCache.reserveFactor = reserve.reserveFactor;
+        reserveCache.liquidationBonus = reserve.liquidationBonus;
+
+        reserveCache.isActive = reserve.isActive;
+        reserveCache.lastUpdate = reserve.lastUpdate;
+
+        return reserveCache;
+    }
 }
