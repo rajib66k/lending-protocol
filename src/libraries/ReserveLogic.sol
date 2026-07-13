@@ -52,7 +52,7 @@ library ReserveLogic {
         if (timestamp == block.timestamp) {
             return reserve.borrowIndex;
         } else {
-            return Math.calculateLinearInterest(reserve.currentBorrowRate, timestamp).rayMul(reserve.borrowIndex);
+            return Math.calculateCompoundedInterest(reserve.currentBorrowRate, timestamp).rayMul(reserve.borrowIndex);
         }
     }
 
@@ -167,7 +167,7 @@ library ReserveLogic {
             reserve.liquidityIndex = reserveCache.nextLiquidityIndex.toUint128();
 
             reserveCache.nextBorrowIndex =
-                Math.calculateLinearInterest(reserve.currentBorrowRate, timestamp).rayMul(reserve.borrowIndex);
+                Math.calculateCompoundedInterest(reserve.currentBorrowRate, timestamp).rayMul(reserve.borrowIndex);
             reserve.borrowIndex = reserveCache.nextBorrowIndex.toUint128();
         }
     }
