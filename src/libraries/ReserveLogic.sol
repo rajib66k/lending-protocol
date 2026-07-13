@@ -4,6 +4,8 @@ pragma solidity 0.8.35;
 import {Math} from "./Math.sol";
 import {InterestRateModel} from "./InterestRateModel.sol";
 import {DataTypes} from "../types/DataTypes.sol";
+import {DebtToken} from "../protocol/DebtToken.sol";
+import {LiquidityToken} from "../protocol/LiquidityToken.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 /**
@@ -106,6 +108,42 @@ library ReserveLogic {
 
         reserve.lastUpdate = timestamp;
         reserveCache.lastUpdate = timestamp;
+    }
+
+    /**
+     * @notice Recalculates and updates the reserve's liquidity and borrow interest rates.
+     * @dev Computes the next utilization ratio using the current scaled liquidity and debt, adjusted for
+     *      liquidity added to or removed from the reserve. The updated utilization is passed to the
+     *      interest rate model to derive the new liquidity and borrow rates, which are then stored in the reserve.
+     * @param reserve The reserve data storage object to update.
+     * @param reserveCache A cached copy of the reserve state
+     * @param liquidityAdded The amount of underlying liquidity added to the reserve.
+     * @param liquidityTaken The amount of underlying liquidity removed from the reserve.
+     * @param interestRateParams The parameters required by the interest rate model to compute the
+     *        next liquidity and borrow rates.
+     */
+    function updateInterestRates(
+        DataTypes.ReserveData storage reserve,
+        DataTypes.ReserveCache memory reserveCache,
+        uint256 liquidityAdded,
+        uint256 liquidityTaken,
+        DataTypes.InterestRateParams memory interestRateParams
+    ) internal {
+        uint256 scaledDebtToken = DebtToken(reserveCache.debtTokenAddress).scaledTotalSupply();
+        uint256 scaledLiquidityToken = LiquidityToken(reserveCache.liquidityTokenAddress).scaledTotalSupply();
+
+        uint256 nextTotalLiquidity =
+            scaledLiquidityToken.rayDiv(reserveCache.liquidityIndex) + liquidityAdded - liquidityTaken;
+
+        uint256 nextTotalDebt = scaledDebtToken.rayDiv(reserveCache.borrowIndex);
+        uint256 nextTotalLiquidityPlusDebt = nextTotalLiquidity + nextTotalDebt;
+
+        (uint256 nextLiquidityRate, uint256 nextBorrowRate) = nextTotalLiquidityPlusDebt.calculateInterestRates(
+            nextTotalDebt, reserveCache.reserveFactor.toUint16(), interestRateParams
+        );
+
+        reserve.currentLiquidityRate = nextLiquidityRate.toUint128();
+        reserve.currentBorrowRate = nextBorrowRate.toUint128();
     }
 
     /**
