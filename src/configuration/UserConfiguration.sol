@@ -5,7 +5,7 @@ import {DataTypes} from "../types/DataTypes.sol";
 
 /**
  * @title UserConfiguration
- * @author Rajib Kuamar Pradhan
+ * @author Rajib Kumar Pradhan
  * @notice Stores user borrowing and collateral states using a bitmap.
  * @dev Each reserve uses two bits:
  *      bit (2*i)     -> borrowing

@@ -5,6 +5,7 @@ import {DataTypes} from "../types/DataTypes.sol";
 
 /**
  * @title ValidationLogic
+ * @author Rajib Kumar Pradhan
  * @notice Library containing validation checks used throughout the lending pool.
  * @dev Provides reusable validation functions for reserve states and user actions.
  */

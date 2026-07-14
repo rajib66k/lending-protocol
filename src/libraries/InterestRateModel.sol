@@ -6,7 +6,7 @@ import {DataTypes} from "../types/DataTypes.sol";
 
 /**
  * @title InterestRateModel
- * @author Rajib Kuamar Pradhan
+ * @author Rajib Kumar Pradhan
  * @notice Calculates borrow and liquidity interest rates based on pool utilization.
  */
 library InterestRateModel {

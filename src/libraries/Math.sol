@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 /**
  * @title Math
- * @author Rajib Kuamar Pradhan
+ * @author Rajib Kumar Pradhan
  * @notice Collection of mathematical utilities used throughout the lending protocol.
  */
 library Math {

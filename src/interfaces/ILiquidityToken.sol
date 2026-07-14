@@ -5,7 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title ILiquidityToken
- * @author Rajib Kuamar Pradhan
+ * @author Rajib Kumar Pradhan
  * @notice Defines the basic interface for a liquidity token.
  */
 interface ILiquidityToken is IERC20 {
