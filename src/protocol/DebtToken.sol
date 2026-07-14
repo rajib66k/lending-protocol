@@ -2,8 +2,10 @@
 pragma solidity 0.8.35;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IPool} from "../interfaces/IPool.sol";
+import {IDebtToken} from "../interfaces/IDebtToken.sol";
 import {Math} from "../libraries/Math.sol";
 
 /**
@@ -12,7 +14,7 @@ import {Math} from "../libraries/Math.sol";
  * @notice Non-transferable token representing a user's debt position.
  * @dev Balances are stored in scaled units and rebased using the reserve debt index.
  */
-contract DebtToken is ERC20, Ownable {
+contract DebtToken is ERC20, Ownable, IDebtToken {
     error DebtToken__OperationNotSupported();
     error DebtToken__MustBeMoreThanZero();
 
@@ -42,7 +44,7 @@ contract DebtToken is ERC20, Ownable {
      * @param to The recipient of the debt tokens.
      * @param amountScaled The scaled amount to mint.
      */
-    function mint(address to, uint256 amountScaled) external onlyOwner {
+    function mint(address to, uint256 amountScaled) external override onlyOwner {
         if (amountScaled == 0) revert DebtToken__MustBeMoreThanZero();
 
         _mint(to, amountScaled);
@@ -54,7 +56,7 @@ contract DebtToken is ERC20, Ownable {
      * @param amountScaled The scaled amount to burn.
      * @return True if the user's scaled balance becomes zero.
      */
-    function burn(address from, uint256 amountScaled) external onlyOwner returns (bool) {
+    function burn(address from, uint256 amountScaled) external override onlyOwner returns (bool) {
         if (amountScaled == 0) revert DebtToken__MustBeMoreThanZero();
 
         _burn(from, amountScaled);
@@ -73,7 +75,7 @@ contract DebtToken is ERC20, Ownable {
      * @param user The address of the user.
      * @return The scaled debt balance.
      */
-    function scaledBalanceOf(address user) public view returns (uint256) {
+    function scaledBalanceOf(address user) public view override returns (uint256) {
         return super.balanceOf(user);
     }
 
@@ -82,7 +84,7 @@ contract DebtToken is ERC20, Ownable {
      * @param user The address of the user.
      * @return The rebased debt balance.
      */
-    function balanceOf(address user) public view override returns (uint256) {
+    function balanceOf(address user) public view override(ERC20, IERC20) returns (uint256) {
         return scaledBalanceOf(user).rayMul(pool.getReserveNormalizedDebt(underlyingAsset));
     }
 
@@ -90,7 +92,7 @@ contract DebtToken is ERC20, Ownable {
      * @notice Returns the total scaled debt supply.
      * @return The total scaled debt.
      */
-    function scaledTotalSupply() public view returns (uint256) {
+    function scaledTotalSupply() public view override returns (uint256) {
         return super.totalSupply();
     }
 
@@ -98,35 +100,35 @@ contract DebtToken is ERC20, Ownable {
      * @notice Returns the current total debt supply.
      * @return The rebased total debt.
      */
-    function totalSupply() public view virtual override returns (uint256) {
+    function totalSupply() public view virtual override(ERC20, IERC20) returns (uint256) {
         return super.totalSupply().rayMul(pool.getReserveNormalizedDebt(underlyingAsset));
     }
 
     /**
      * @dev Debt tokens are non-transferable.
      */
-    function transfer(address, uint256) public virtual override returns (bool) {
+    function transfer(address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert DebtToken__OperationNotSupported();
     }
 
     /**
      * @dev Debt tokens are non-transferable.
      */
-    function transferFrom(address, address, uint256) public virtual override returns (bool) {
+    function transferFrom(address, address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert DebtToken__OperationNotSupported();
     }
 
     /**
      * @dev Debt tokens do not support approvals.
      */
-    function approve(address, uint256) public virtual override returns (bool) {
+    function approve(address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert DebtToken__OperationNotSupported();
     }
 
     /**
      * @notice Returns zero since allowances are not supported.
      */
-    function allowance(address, address) public view virtual override returns (uint256) {
+    function allowance(address, address) public view virtual override(ERC20, IERC20) returns (uint256) {
         return 0;
     }
 }

@@ -4,8 +4,8 @@ pragma solidity 0.8.35;
 import {Math} from "./Math.sol";
 import {InterestRateModel} from "./InterestRateModel.sol";
 import {DataTypes} from "../types/DataTypes.sol";
-import {DebtToken} from "../protocol/DebtToken.sol";
-import {LiquidityToken} from "../protocol/LiquidityToken.sol";
+import {IDebtToken} from "../interfaces/IDebtToken.sol";
+import {ILiquidityToken} from "../interfaces/ILiquidityToken.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 /**
@@ -129,8 +129,8 @@ library ReserveLogic {
         uint256 liquidityTaken,
         DataTypes.InterestRateParams memory interestRateParams
     ) internal {
-        uint256 scaledDebtToken = DebtToken(reserveCache.debtTokenAddress).scaledTotalSupply();
-        uint256 scaledLiquidityToken = LiquidityToken(reserveCache.liquidityTokenAddress).scaledTotalSupply();
+        uint256 scaledDebtToken = IDebtToken(reserveCache.debtTokenAddress).scaledTotalSupply();
+        uint256 scaledLiquidityToken = ILiquidityToken(reserveCache.liquidityTokenAddress).scaledTotalSupply();
 
         uint256 nextTotalLiquidity =
             scaledLiquidityToken.rayDiv(reserveCache.liquidityIndex) + liquidityAdded - liquidityTaken;

@@ -2,8 +2,10 @@
 pragma solidity 0.8.35;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IPool} from "../interfaces/IPool.sol";
+import {ILiquidityToken} from "../interfaces/ILiquidityToken.sol";
 import {Math} from "../libraries/Math.sol";
 
 /**
@@ -12,7 +14,7 @@ import {Math} from "../libraries/Math.sol";
  * @notice Token representing a user's supplied liquidity position.
  * @dev Balances are stored in scaled units and rebased using the reserve liquidity index.
  */
-contract LiquidityToken is ERC20, Ownable {
+contract LiquidityToken is ERC20, Ownable, ILiquidityToken {
     error LiquidityToken__MustBeMoreThanZero();
     error LiquidityToken__OperationNotSupported();
 
@@ -42,7 +44,7 @@ contract LiquidityToken is ERC20, Ownable {
      * @param to The address receiving the liquidity tokens.
      * @param amountScaled The scaled amount to mint.
      */
-    function mint(address to, uint256 amountScaled) external onlyOwner {
+    function mint(address to, uint256 amountScaled) external override onlyOwner {
         if (amountScaled == 0) revert LiquidityToken__MustBeMoreThanZero();
 
         _mint(to, amountScaled);
@@ -54,7 +56,7 @@ contract LiquidityToken is ERC20, Ownable {
      * @param amountScaled The scaled amount to burn.
      * @return True if the user's scaled balance becomes zero.
      */
-    function burn(address from, uint256 amountScaled) external onlyOwner returns (bool) {
+    function burn(address from, uint256 amountScaled) external override onlyOwner returns (bool) {
         if (amountScaled == 0) revert LiquidityToken__MustBeMoreThanZero();
 
         _burn(from, amountScaled);
@@ -76,7 +78,12 @@ contract LiquidityToken is ERC20, Ownable {
      * @param scaledAmount The scaled amount to transfer.
      * @return True after successful transfer.
      */
-    function transferOnBehalf(address from, address to, uint256 scaledAmount) external onlyOwner returns (bool) {
+    function transferOnBehalf(address from, address to, uint256 scaledAmount)
+        external
+        override
+        onlyOwner
+        returns (bool)
+    {
         if (scaledAmount == 0) revert LiquidityToken__MustBeMoreThanZero();
 
         _transfer(from, to, scaledAmount);
@@ -88,7 +95,7 @@ contract LiquidityToken is ERC20, Ownable {
      * @param user The address of the user.
      * @return The scaled balance before applying the liquidity index.
      */
-    function scaledBalanceOf(address user) public view returns (uint256) {
+    function scaledBalanceOf(address user) public view override returns (uint256) {
         return super.balanceOf(user);
     }
 
@@ -98,7 +105,7 @@ contract LiquidityToken is ERC20, Ownable {
      * @param user The address of the user.
      * @return The rebased liquidity balance.
      */
-    function balanceOf(address user) public view override returns (uint256) {
+    function balanceOf(address user) public view override(ERC20, IERC20) returns (uint256) {
         return scaledBalanceOf(user).rayMulFloor(pool.getReserveNormalizedIncome(underlyingAsset));
     }
 
@@ -106,7 +113,7 @@ contract LiquidityToken is ERC20, Ownable {
      * @notice Returns the total scaled liquidity token supply.
      * @return The total scaled supply before applying the liquidity index.
      */
-    function scaledTotalSupply() public view returns (uint256) {
+    function scaledTotalSupply() public view override returns (uint256) {
         return super.totalSupply();
     }
 
@@ -115,35 +122,35 @@ contract LiquidityToken is ERC20, Ownable {
      * @dev Applies the current normalized liquidity index.
      * @return The rebased total supply.
      */
-    function totalSupply() public view virtual override returns (uint256) {
+    function totalSupply() public view virtual override(ERC20, IERC20) returns (uint256) {
         return super.totalSupply().rayMulFloor(pool.getReserveNormalizedIncome(underlyingAsset));
     }
 
     /**
      * @dev Liquidity tokens cannot be transferred directly.
      */
-    function transfer(address, uint256) public virtual override returns (bool) {
+    function transfer(address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert LiquidityToken__OperationNotSupported();
     }
 
     /**
      * @dev Liquidity tokens cannot be transferred using allowances.
      */
-    function transferFrom(address, address, uint256) public virtual override returns (bool) {
+    function transferFrom(address, address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert LiquidityToken__OperationNotSupported();
     }
 
     /**
      * @dev Liquidity tokens do not support approvals.
      */
-    function approve(address, uint256) public virtual override returns (bool) {
+    function approve(address, uint256) public virtual override(ERC20, IERC20) returns (bool) {
         revert LiquidityToken__OperationNotSupported();
     }
 
     /**
      * @notice Returns zero since allowances are not supported.
      */
-    function allowance(address, address) public view virtual override returns (uint256) {
+    function allowance(address, address) public view virtual override(ERC20, IERC20) returns (uint256) {
         return 0;
     }
 }
