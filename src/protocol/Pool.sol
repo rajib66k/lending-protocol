@@ -74,6 +74,24 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Returns the current normalized income index of a reserve.
+     * @param asset The address of the reserve asset.
+     * @return The normalized income index used for liquidity token balance calculations.
+     */
+    function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
+        return reserves[asset].getReserveNormalizedIncome();
+    }
+
+    /**
+     * @notice Returns the current normalized variable debt index of a reserve.
+     * @param asset The address of the reserve asset.
+     * @return The normalized debt index used for debt token balance calculations.
+     */
+    function getReserveNormalizedDebt(address asset) external view override returns (uint256) {
+        return reserves[asset].getReserveNormalizedDebt();
+    }
+
+    /**
      * @notice Converts asset token amount into the equivalent USD-denominated amount
      * @param asset The ERC20 token address
      * @param amount The asset amount (18 decimals precision)
