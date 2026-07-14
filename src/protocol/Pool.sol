@@ -11,6 +11,7 @@ import {IDebtToken} from "../interfaces/IDebtToken.sol";
 import {UserConfiguration} from "../configuration/UserConfiguration.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title Pool
@@ -19,14 +20,14 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  * @dev Currently implements the supply operation. Additional functionality such as withdrawals,
  *      borrowing, repayment, and liquidation will be added incrementally.
  */
-abstract contract Pool is IPool, ReentrancyGuard {
+abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     using ReserveLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
     using Math for uint256;
     using SafeERC20 for IERC20;
 
-    /// @notice Global interest rate configuration.
-    DataTypes.InterestRateParams public interestRateParams;
+    /// @notice Interest rate configuration for each supported reserve.
+    mapping(address asset => DataTypes.InterestRateParams) public interestRateParams;
 
     /// @notice Reserve data for each supported asset.
     mapping(address asset => DataTypes.ReserveData) public reserves;
@@ -42,6 +43,8 @@ abstract contract Pool is IPool, ReentrancyGuard {
 
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
+
+    constructor() Ownable(msg.sender) {}
 
     /**
      * @notice Supplies assets to the lending pool.
@@ -60,7 +63,7 @@ abstract contract Pool is IPool, ReentrancyGuard {
         uint256 scaledAmount = amount.rayDivFloor(reserveCache.nextLiquidityIndex);
         reserveCache.validateSupply(scaledAmount);
 
-        reserve.updateInterestRates(reserveCache, amount, 0, interestRateParams);
+        reserve.updateInterestRates(reserveCache, amount, 0, interestRateParams[asset]);
 
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         ILiquidityToken(reserveCache.liquidityTokenAddress).mint(onBehalfOf, scaledAmount);
