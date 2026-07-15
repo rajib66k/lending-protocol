@@ -81,6 +81,33 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Withdraws assets from the lending pool.
+     * @dev Transfers the underlying asset to the caller, updates reserve state,
+     *      recalculates interest rates, and burns liquidity tokens.
+     * @param asset The address of the asset being withdrawn.
+     * @param amount The amount of the asset to withdraw.
+     * @param to The address that will receive the withdrawn assets.
+     */
+    function withdraw(address asset, uint256 amount, address to) external override nonReentrant {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+        DataTypes.ReserveCache memory reserveCache = reserve.cache();
+
+        reserve.updateState(reserveCache);
+
+        uint256 scaledAmount = amount.rayDivCeil(reserveCache.nextLiquidityIndex);
+        uint256 healthFactorAfter = _healthFactor(msg.sender, asset, amount, address(0), 0);
+
+        reserveCache.validateWithdraw(msg.sender, asset, amount, scaledAmount, healthFactorAfter);
+
+        reserve.updateInterestRates(reserveCache, 0, amount, sInterestRateParams[asset]);
+        bool zeroBalance = ILiquidityToken(reserveCache.liquidityTokenAddress).burn(msg.sender, scaledAmount);
+        if (zeroBalance) {
+            _setUseAsCollateral(msg.sender, reserve.id, false);
+        }
+        IERC20(asset).safeTransfer(to, amount);
+    }
+
+    /**
      * @notice Returns the current normalized income index of a reserve.
      * @param asset The address of the reserve asset.
      * @return The normalized income index used for liquidity token balance calculations.
@@ -167,6 +194,19 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         uint256 collateralAdjustedForThreshold = totalCollateralInUsd.percentageMul(avgLiquidationThreshold);
 
         return collateralAdjustedForThreshold.wadDiv(totalDebtInUsd);
+    }
+
+    /**
+     * @notice Sets whether a reserve can be used as collateral by a user.
+     * @param user The address of the user.
+     * @param reserveId The ID of the reserve.
+     * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
+     */
+    function _setUseAsCollateral(address user, uint256 reserveId, bool useAsCollateral) internal {
+        DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
+        reserveId.validateSetUseAsCollateral(userConfig, useAsCollateral);
+
+        userConfig.setCollateral(reserveId, useAsCollateral);
     }
 
     /**
