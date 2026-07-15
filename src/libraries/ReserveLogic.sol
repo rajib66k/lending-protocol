@@ -133,11 +133,10 @@ library ReserveLogic {
         uint256 scaledDebtToken = IDebtToken(reserveCache.debtTokenAddress).scaledTotalSupply();
         uint256 scaledLiquidityToken = ILiquidityToken(reserveCache.liquidityTokenAddress).scaledTotalSupply();
 
-        uint256 nextTotalLiquidity =
-            scaledLiquidityToken.rayDiv(reserveCache.liquidityIndex) + liquidityAdded - liquidityTaken;
+        uint256 nextTotalLiquidityPlusDebt =
+            scaledLiquidityToken.rayDiv(reserveCache.nextLiquidityIndex) + liquidityAdded - liquidityTaken;
 
-        uint256 nextTotalDebt = scaledDebtToken.rayDiv(reserveCache.borrowIndex);
-        uint256 nextTotalLiquidityPlusDebt = nextTotalLiquidity + nextTotalDebt;
+        uint256 nextTotalDebt = scaledDebtToken.rayDiv(reserveCache.nextBorrowIndex);
 
         (uint256 nextLiquidityRate, uint256 nextBorrowRate) = nextTotalLiquidityPlusDebt.calculateInterestRates(
             nextTotalDebt, reserveCache.reserveFactor.toUint16(), interestRateParams
