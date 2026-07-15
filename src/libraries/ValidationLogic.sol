@@ -19,6 +19,7 @@ library ValidationLogic {
     error ValidationLogic__BreaksHealthFactor();
     error ValidationLogic__PoolHasNotEnoughLiquidity();
     error ValidationLogic__AlreadyUsingAsCollateralIs(bool useAsCollateral);
+    error ValidationLogic__UnderlyingBalanceIsZero();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
@@ -58,6 +59,18 @@ library ValidationLogic {
         );
         validateUserHealthFactorAfterAction(healthFactorAfter);
         validatePoolLiquidity(asset, amount);
+    }
+
+    /**
+     * @notice Validates the setting of a reserve as collateral.
+     * @param reserve The reserve data.
+     * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
+     */
+    function validateSetUseAsCollateral(DataTypes.ReserveData storage reserve, bool useAsCollateral) internal view {
+        if (!reserve.isActive) revert ValidationLogic__ReserveInactive();
+        if (ILiquidityToken(reserve.liquidityTokenAddress).scaledBalanceOf(msg.sender) == 0 && useAsCollateral) {
+            revert ValidationLogic__UnderlyingBalanceIsZero();
+        }
     }
 
     /**
@@ -109,7 +122,7 @@ library ValidationLogic {
      * @param userConfig The user's configuration.
      * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
      */
-    function validateSetUseAsCollateral(
+    function validateSetUseAsCollateralInternal(
         uint256 reserveId,
         DataTypes.UserConfiguration storage userConfig,
         bool useAsCollateral

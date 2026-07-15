@@ -24,8 +24,10 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  */
 abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     error Pool__NotEnoughAvailableUserBalance();
+    error Pool__BreaksHealthFactor();
 
     using ReserveLogic for DataTypes.ReserveData;
+    using ValidationLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
     using ValidationLogic for uint256;
     using OracleLib for AggregatorV3Interface;
@@ -105,6 +107,21 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
             _setUseAsCollateral(msg.sender, reserve.id, false);
         }
         IERC20(asset).safeTransfer(to, amount);
+    }
+
+    /**
+     * @notice Sets whether a reserve can be used as collateral by a user.
+     * @param asset The address of the asset.
+     * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
+     */
+    function setUseAsCollateral(address asset, bool useAsCollateral) public {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        reserve.validateSetUseAsCollateral(useAsCollateral);
+
+        _setUseAsCollateral(msg.sender, reserve.id, useAsCollateral);
+        uint256 hf = _healthFactor(msg.sender, address(0), 0, address(0), 0);
+        if (hf < ValidationLogic.MIN_HEALTH_FACTOR) revert Pool__BreaksHealthFactor();
     }
 
     /**
@@ -204,7 +221,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function _setUseAsCollateral(address user, uint256 reserveId, bool useAsCollateral) internal {
         DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
-        reserveId.validateSetUseAsCollateral(userConfig, useAsCollateral);
+        reserveId.validateSetUseAsCollateralInternal(userConfig, useAsCollateral);
 
         userConfig.setCollateral(reserveId, useAsCollateral);
     }
