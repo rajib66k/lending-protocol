@@ -110,6 +110,31 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Borrows assets from the lending pool.
+     * @dev Transfers the underlying asset to the caller, updates reserve state,
+     *      recalculates interest rates, and mints debt tokens.
+     * @param asset The address of the asset being borrowed.
+     * @param amount The amount of the asset to borrow.
+     */
+    function borrow(address asset, uint256 amount) external override nonReentrant {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+        DataTypes.ReserveCache memory reserveCache = reserve.cache();
+        DataTypes.UserConfiguration storage userConfig = sUserConfig[msg.sender];
+
+        reserve.updateState(reserveCache);
+
+        uint256 scaledAmount = amount.rayDiv(reserveCache.nextBorrowIndex);
+        uint256 healthFactorAfter = _healthFactor(msg.sender, address(0), 0, asset, amount);
+        reserveCache.validateBorrow(userConfig, asset, amount, scaledAmount, healthFactorAfter);
+
+        reserve.updateInterestRates(reserveCache, 0, amount, sInterestRateParams[asset]);
+
+        IDebtToken(reserveCache.debtTokenAddress).mint(msg.sender, scaledAmount);
+        _setAsBorrowing(msg.sender, reserve.id, true);
+        IERC20(asset).safeTransfer(msg.sender, amount);
+    }
+
+    /**
      * @notice Sets whether a reserve can be used as collateral by a user.
      * @param asset The address of the asset.
      * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
@@ -224,6 +249,20 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         reserveId.validateSetUseAsCollateralInternal(userConfig, useAsCollateral);
 
         userConfig.setCollateral(reserveId, useAsCollateral);
+    }
+
+    /**
+     * @notice Updates whether a user is borrowing from a specific reserve.
+     * @dev Reverts if the requested borrowing status is already set for the reserve.
+     * @param user The address of the user.
+     * @param reserveId The identifier of the reserve.
+     * @param borrowing True to mark the user as borrowing from the reserve, false otherwise.
+     */
+    function _setAsBorrowing(address user, uint256 reserveId, bool borrowing) internal {
+        DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
+        reserveId.validateSetAsBorrowing(userConfig, borrowing);
+
+        userConfig.setBorrowing(reserveId, borrowing);
     }
 
     /**

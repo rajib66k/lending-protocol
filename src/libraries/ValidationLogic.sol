@@ -19,7 +19,9 @@ library ValidationLogic {
     error ValidationLogic__BreaksHealthFactor();
     error ValidationLogic__PoolHasNotEnoughLiquidity();
     error ValidationLogic__AlreadyUsingAsCollateralIs(bool useAsCollateral);
+    error ValidationLogic__AlreadyBorrowingIs(bool borrowing);
     error ValidationLogic__UnderlyingBalanceIsZero();
+    error ValidationLogic__NotUsingAsCollateral();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
@@ -57,6 +59,30 @@ library ValidationLogic {
         validateUserHaveEnoughBalance(
             ILiquidityToken(reserveCache.liquidityTokenAddress).scaledBalanceOf(user), scaledAmount
         );
+        validateUserHealthFactorAfterAction(healthFactorAfter);
+        validatePoolLiquidity(asset, amount);
+    }
+
+    /**
+     * @notice Validates whether a borrow operation can be executed.
+     * @param reserveCache Cached reserve data required for validation.
+     * @param userConfig The user's configuration.
+     * @param asset The address of the asset being borrowed.
+     * @param amount The amount of the asset to borrow.
+     * @param scaledAmount The scaled amount of the asset to borrow.
+     * @param healthFactorAfter The user's health factor after the action.
+     */
+    function validateBorrow(
+        DataTypes.ReserveCache memory reserveCache,
+        DataTypes.UserConfiguration storage userConfig,
+        address asset,
+        uint256 amount,
+        uint256 scaledAmount,
+        uint256 healthFactorAfter
+    ) internal view {
+        validateReserveActive(reserveCache);
+        validateAmount(scaledAmount);
+        if (!userConfig.hasCollateral()) revert ValidationLogic__NotUsingAsCollateral();
         validateUserHealthFactorAfterAction(healthFactorAfter);
         validatePoolLiquidity(asset, amount);
     }
@@ -129,6 +155,21 @@ library ValidationLogic {
     ) internal view {
         if (useAsCollateral == userConfig.isCollateral(reserveId)) {
             revert ValidationLogic__AlreadyUsingAsCollateralIs(useAsCollateral);
+        }
+    }
+
+    /**
+     * @notice Validates the setting of a reserve as borrowing.
+     * @param reserveId The ID of the reserve.
+     * @param userConfig The user's configuration.
+     * @param borrowing The flag indicating if the reserve should be set as borrowing.
+     */
+    function validateSetAsBorrowing(uint256 reserveId, DataTypes.UserConfiguration storage userConfig, bool borrowing)
+        internal
+        view
+    {
+        if (borrowing == userConfig.isBorrowing(reserveId)) {
+            revert ValidationLogic__AlreadyBorrowingIs(borrowing);
         }
     }
 }
