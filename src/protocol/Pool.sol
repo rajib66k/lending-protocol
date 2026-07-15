@@ -23,9 +23,6 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  *      borrowing, repayment, and liquidation will be added incrementally.
  */
 abstract contract Pool is IPool, ReentrancyGuard, Ownable {
-    error Pool__NotEnoughAvailableUserBalance();
-    error Pool__BreaksHealthFactor();
-
     using ReserveLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
@@ -146,7 +143,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
 
         _setUseAsCollateral(msg.sender, reserve.id, useAsCollateral);
         uint256 hf = _healthFactor(msg.sender, address(0), 0, address(0), 0);
-        if (hf < ValidationLogic.MIN_HEALTH_FACTOR) revert Pool__BreaksHealthFactor();
+        hf.validateUserHealthFactorAfterAction();
     }
 
     /**
