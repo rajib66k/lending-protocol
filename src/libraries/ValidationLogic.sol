@@ -12,6 +12,7 @@ import {DataTypes} from "../types/DataTypes.sol";
 library ValidationLogic {
     error ValidationLogic__ReserveInactive();
     error ValidationLogic__NeedsMoreThanZero();
+    error ValidationLogic__UserHasNotEnoughBalance();
 
     /**
      * @notice Validates whether a supply operation can be executed.
@@ -37,5 +38,14 @@ library ValidationLogic {
      */
     function validateReserveActive(DataTypes.ReserveCache memory reserveCache) internal pure {
         if (!reserveCache.isActive) revert ValidationLogic__ReserveInactive();
+    }
+
+    /**
+     * @notice Validates that a user has enough balance for a transaction.
+     * @param userBalance The user's current balance.
+     * @param amount The amount to validate.
+     */
+    function validateUserHaveEnoughBalance(uint256 userBalance, uint256 amount) internal pure {
+        if (userBalance < amount) revert ValidationLogic__UserHasNotEnoughBalance();
     }
 }

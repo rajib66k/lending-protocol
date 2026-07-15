@@ -23,11 +23,15 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  *      borrowing, repayment, and liquidation will be added incrementally.
  */
 abstract contract Pool is IPool, ReentrancyGuard, Ownable {
+    error Pool__NotEnoughAvailableUserBalance();
+
     using ReserveLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
+    using ValidationLogic for uint256;
     using OracleLib for AggregatorV3Interface;
     using Math for uint256;
     using SafeERC20 for IERC20;
+    using UserConfiguration for DataTypes.UserConfiguration;
 
     /// @notice Interest rate configuration for each supported reserve.
     mapping(address asset => DataTypes.InterestRateParams) internal sInterestRateParams;
@@ -43,6 +47,9 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
 
     /// @notice User collateral and borrowing configuration.
     mapping(address user => DataTypes.UserConfiguration) internal sUserConfig;
+
+    /// @dev Maximum number of reserves supported by the protocol.
+    uint256 internal constant MAX_RESERVE_LENGTH = 128;
 
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
@@ -89,6 +96,77 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function getReserveNormalizedDebt(address asset) external view override returns (uint256) {
         return sReserves[asset].getReserveNormalizedDebt();
+    }
+
+    /**
+     * @notice Calculates a user's current or simulated health factor.
+     * @dev If `collateralAsset`, `collateralDecrease`, `debtAsset`, and `debtIncrease` are all zero,
+     *      returns the user's current health factor.
+     * @param user The account whose health factor is being evaluated.
+     * @param collateralAsset The collateral asset to simulate withdrawing from.
+     * @param collateralDecrease The amount of collateral to hypothetically remove.
+     * @param debtAsset The asset to simulate borrowing.
+     * @param debtIncrease The additional debt amount to hypothetically add.
+     * @return The simulated health factor, scaled by 1e18.
+     */
+    function _healthFactor(
+        address user,
+        address collateralAsset,
+        uint256 collateralDecrease,
+        address debtAsset,
+        uint256 debtIncrease
+    ) internal view returns (uint256) {
+        DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
+
+        if (!sUserConfig[user].hasBorrow()) return type(uint256).max;
+
+        uint256 weightedLiquidationThreshold;
+        uint256 totalCollateralInUsd;
+        uint256 totalDebtInUsd;
+
+        for (uint256 i; i < MAX_RESERVE_LENGTH; ++i) {
+            address reserveAsset = sReservesList[i];
+            if (reserveAsset == address(0)) continue;
+
+            DataTypes.ReserveData storage reserve = sReserves[reserveAsset];
+            if (!reserve.isActive) continue;
+
+            if (userConfig.isCollateral(i)) {
+                uint256 balance = ILiquidityToken(reserve.liquidityTokenAddress).balanceOf(user);
+
+                if (reserveAsset == collateralAsset) {
+                    balance.validateUserHaveEnoughBalance(collateralDecrease);
+                    balance -= collateralDecrease;
+                }
+
+                if (balance != 0) {
+                    uint256 collateralValue = _usdValue(reserveAsset, balance);
+
+                    totalCollateralInUsd += collateralValue;
+                    weightedLiquidationThreshold += collateralValue * reserve.liquidationThreshold;
+                }
+            }
+
+            if (userConfig.isBorrowing(i)) {
+                uint256 debt = IDebtToken(reserve.debtTokenAddress).balanceOf(user);
+
+                if (debt != 0) {
+                    totalDebtInUsd += _usdValue(reserveAsset, debt);
+                }
+            }
+        }
+
+        if (debtIncrease != 0) {
+            totalDebtInUsd += _usdValue(debtAsset, debtIncrease);
+        }
+
+        if (totalDebtInUsd == 0) return type(uint256).max;
+        if (totalCollateralInUsd == 0) return 0;
+
+        uint256 avgLiquidationThreshold = weightedLiquidationThreshold / totalCollateralInUsd;
+        uint256 collateralAdjustedForThreshold = totalCollateralInUsd.percentageMul(avgLiquidationThreshold);
+
+        return collateralAdjustedForThreshold.wadDiv(totalDebtInUsd);
     }
 
     /**

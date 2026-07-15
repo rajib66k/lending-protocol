@@ -35,6 +35,8 @@ library DataTypes {
         uint16 liquidationBonus;
         // the reserve factor
         uint16 reserveFactor;
+        // The position in the list of reserves
+        uint16 id;
         // timestamp of last update
         uint40 lastUpdate;
         // reserve is active
