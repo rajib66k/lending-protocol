@@ -105,6 +105,7 @@ library ReserveLogic {
         }
 
         _updateIndexes(reserve, reserveCache);
+        _accrueToTreasury(reserveCache);
 
         reserve.lastUpdate = timestamp;
         reserveCache.lastUpdate = timestamp;
