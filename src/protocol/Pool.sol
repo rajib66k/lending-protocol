@@ -30,19 +30,19 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     /// @notice Interest rate configuration for each supported reserve.
-    mapping(address asset => DataTypes.InterestRateParams) public interestRateParams;
+    mapping(address asset => DataTypes.InterestRateParams) internal sInterestRateParams;
 
     /// @notice Reserve data for each supported asset.
-    mapping(address asset => DataTypes.ReserveData) public reserves;
+    mapping(address asset => DataTypes.ReserveData) internal sReserves;
 
     /// @notice Maps reserve IDs to their underlying asset addresses.
-    mapping(uint256 id => address asset) internal reservesList;
+    mapping(uint256 id => address asset) internal sReservesList;
 
     /// @notice Price feed configuration for supported assets.
-    mapping(address asset => DataTypes.FeedData) public feeds;
+    mapping(address asset => DataTypes.FeedData) internal sFeeds;
 
     /// @notice User collateral and borrowing configuration.
-    mapping(address user => DataTypes.UserConfiguration) public userConfig;
+    mapping(address user => DataTypes.UserConfiguration) internal sUserConfig;
 
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
@@ -58,7 +58,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @param onBehalfOf The address that will receive the liquidity tokens.
      */
     function supply(address asset, uint256 amount, address onBehalfOf) external override nonReentrant {
-        DataTypes.ReserveData storage reserve = reserves[asset];
+        DataTypes.ReserveData storage reserve = sReserves[asset];
         DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
         reserve.updateState(reserveCache);
@@ -66,7 +66,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         uint256 scaledAmount = amount.rayDivFloor(reserveCache.nextLiquidityIndex);
         reserveCache.validateSupply(scaledAmount);
 
-        reserve.updateInterestRates(reserveCache, amount, 0, interestRateParams[asset]);
+        reserve.updateInterestRates(reserveCache, amount, 0, sInterestRateParams[asset]);
 
         IERC20(asset).safeTransferFrom(msg.sender, address(this), amount);
         ILiquidityToken(reserveCache.liquidityTokenAddress).mint(onBehalfOf, scaledAmount);
@@ -79,7 +79,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @return The normalized income index used for liquidity token balance calculations.
      */
     function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
-        return reserves[asset].getReserveNormalizedIncome();
+        return sReserves[asset].getReserveNormalizedIncome();
     }
 
     /**
@@ -88,7 +88,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @return The normalized debt index used for debt token balance calculations.
      */
     function getReserveNormalizedDebt(address asset) external view override returns (uint256) {
-        return reserves[asset].getReserveNormalizedDebt();
+        return sReserves[asset].getReserveNormalizedDebt();
     }
 
     /**
@@ -99,20 +99,19 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @dev Uses Chainlink price feeds for token/USD conversion & OracleLib for stale check
      */
     function _usdValue(address asset, uint256 amount) internal view returns (uint256) {
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(feeds[asset].priceFeedAddress);
+        DataTypes.FeedData memory feed = sFeeds[asset];
+        
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(feed.priceFeedAddress);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
 
-        uint256 tokenDecimals = feeds[asset].tokenDecimals;
-        uint256 feedDecimals = feeds[asset].feedDecimals;
-
-        if (feedDecimals < 18) {
+        if (feed.feedDecimals < 18) {
             // casting to 'uint256' is safe because OracleLib guarantees a non-negative answer
             // forge-lint: disable-next-line(unsafe-typecast)
-            return (amount * (uint256(price)) * 10 ** (18 - feedDecimals) / 10 ** tokenDecimals);
+            return (amount * (uint256(price)) * 10 ** (18 - feed.feedDecimals) / 10 ** feed.tokenDecimals);
         } else {
             // casting to 'uint256' is safe because OracleLib guarantees a non-negative answer
             // forge-lint: disable-next-line(unsafe-typecast)
-            return (amount * uint256(price)) / (10 ** tokenDecimals * 10 ** (feedDecimals - 18));
+            return (amount * uint256(price)) / (10 ** feed.tokenDecimals * 10 ** (feed.feedDecimals - 18));
         }
     }
 
@@ -124,20 +123,19 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @dev Uses Chainlink price feeds for token/USD conversion & OracleLib for stale check
      */
     function _tokenAmountFromUsd(address asset, uint256 usdAmount) internal view returns (uint256) {
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(feeds[asset].priceFeedAddress);
+        DataTypes.FeedData memory feed = sFeeds[asset];
+
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(feed.priceFeedAddress);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
 
-        uint256 tokenDecimals = feeds[asset].tokenDecimals;
-        uint256 feedDecimals = feeds[asset].feedDecimals;
-
-        if (feedDecimals < 18) {
+        if (feed.feedDecimals < 18) {
             // casting to 'uint256' is safe because OracleLib guarantees a non-negative answer
             // forge-lint: disable-next-line(unsafe-typecast)
-            return (usdAmount * 10 ** tokenDecimals) / (uint256(price) * 10 ** (18 - feedDecimals));
+            return (usdAmount * 10 ** feed.tokenDecimals) / (uint256(price) * 10 ** (18 - feed.feedDecimals));
         } else {
             // casting to 'uint256' is safe because OracleLib guarantees a non-negative answer
             // forge-lint: disable-next-line(unsafe-typecast)
-            return (usdAmount * 10 ** tokenDecimals * 10 ** (feedDecimals - 18)) / (uint256(price));
+            return (usdAmount * 10 ** feed.tokenDecimals * 10 ** (feed.feedDecimals - 18)) / (uint256(price));
         }
     }
 }
