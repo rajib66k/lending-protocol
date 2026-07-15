@@ -147,6 +147,25 @@ library ReserveLogic {
     }
 
     /**
+     * @notice Accrues the protocol's share of interest to the treasury.
+     * @dev Calculates the treasury's share based on the reserve factor and mints it as scaled liquidity tokens.
+     * @param reserveCache The cached reserve state.
+     */
+    function _accrueToTreasury(DataTypes.ReserveCache memory reserveCache) internal {
+        if (reserveCache.reserveFactor == 0) return;
+
+        uint256 totalDebtAccrued = IDebtToken(reserveCache.debtTokenAddress).scaledTotalSupply()
+            .rayMul(reserveCache.nextBorrowIndex - reserveCache.borrowIndex);
+
+        uint256 amountToMint = totalDebtAccrued.percentageMul(reserveCache.reserveFactor);
+        uint256 scaledAmount = amountToMint.rayDivFloor(reserveCache.nextLiquidityIndex);
+
+        if (scaledAmount != 0) {
+            ILiquidityToken(reserveCache.liquidityTokenAddress).mintToTreasury(scaledAmount);
+        }
+    }
+
+    /**
      * @notice Updates the reserve liquidity and borrow indexes by applying accrued interest.
      * @dev Calculates linear interest from the last reserve update timestamp and updates the stored indexes.
      *      If the reserve was already updated in the current block, no update is performed.

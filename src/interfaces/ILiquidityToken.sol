@@ -34,6 +34,12 @@ interface ILiquidityToken is IERC20 {
     function transferOnBehalf(address from, address to, uint256 scaledAmount) external returns (bool);
 
     /**
+     * @notice Mints liquidity tokens to the treasury.
+     * @param scaledAmount The scaled amount to mint.
+     */
+    function mintToTreasury(uint256 scaledAmount) external;
+
+    /**
      * @notice Returns the user's scaled liquidity token balance.
      */
     function scaledBalanceOf(address user) external view returns (uint256);

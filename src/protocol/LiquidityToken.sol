@@ -20,7 +20,8 @@ contract LiquidityToken is ERC20, Ownable, ILiquidityToken {
 
     using Math for uint256;
 
-    address internal immutable underlyingAsset;
+    address public immutable treasury;
+    address public immutable underlyingAsset;
     uint8 internal immutable tokenDecimals;
     IPool internal immutable pool;
 
@@ -34,6 +35,7 @@ contract LiquidityToken is ERC20, Ownable, ILiquidityToken {
         Ownable(msg.sender)
         ERC20(tokenName, symbol)
     {
+        treasury = msg.sender;
         pool = IPool(poolAddress);
         underlyingAsset = asset;
         tokenDecimals = assetDecimals;
@@ -88,6 +90,12 @@ contract LiquidityToken is ERC20, Ownable, ILiquidityToken {
 
         _transfer(from, to, scaledAmount);
         return true;
+    }
+
+    function mintToTreasury(uint256 scaledAmount) external virtual override onlyOwner {
+        if (scaledAmount == 0) revert LiquidityToken__MustBeMoreThanZero();
+
+        _mint(treasury, scaledAmount);
     }
 
     /**

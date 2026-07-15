@@ -100,7 +100,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function _usdValue(address asset, uint256 amount) internal view returns (uint256) {
         DataTypes.FeedData memory feed = sFeeds[asset];
-        
+
         AggregatorV3Interface priceFeed = AggregatorV3Interface(feed.priceFeedAddress);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
 
