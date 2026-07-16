@@ -88,6 +88,16 @@ library ValidationLogic {
     }
 
     /**
+     * @notice Validates whether a repay operation can be executed.
+     * @param reserveCache Cached reserve data required for validation.
+     * @param scaledDebt scaledDebt user want to repay.
+     */
+    function validateRepay(DataTypes.ReserveCache memory reserveCache, uint256 scaledDebt) internal pure {
+        validateReserveActive(reserveCache);
+        validateAmount(scaledDebt);
+    }
+
+    /**
      * @notice Validates the setting of a reserve as collateral.
      * @param reserve The reserve data.
      * @param useAsCollateral The flag indicating if the reserve should be used as collateral.

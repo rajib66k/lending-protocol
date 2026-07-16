@@ -53,6 +53,17 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
 
+    /// @notice Emitted when a user withdraws assets from the pool.
+    event Withdraw(address indexed asset, address indexed user, address indexed to, uint256 amount);
+
+    /// @notice Emitted when a user borrows assets from the pool.
+    event Borrow(address indexed asset, address indexed user, uint256 amount);
+
+    /// @notice Emitted when a user repays borrowed assets to the pool.
+    event Repay(
+        address indexed reserve, address indexed user, address indexed repayer, uint256 amount, bool useATokens
+    );
+
     constructor() Ownable(msg.sender) {}
 
     /**
@@ -104,6 +115,7 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
             _setUseAsCollateral(msg.sender, reserve.id, false);
         }
         IERC20(asset).safeTransfer(to, amount);
+        emit Withdraw(asset, msg.sender, to, amount);
     }
 
     /**
@@ -129,6 +141,26 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         IDebtToken(reserveCache.debtTokenAddress).mint(msg.sender, scaledAmount);
         _setAsBorrowing(msg.sender, reserve.id, true);
         IERC20(asset).safeTransfer(msg.sender, amount);
+        emit Borrow(asset, msg.sender, amount);
+    }
+
+    /**
+     * @notice Repays borrowed assets on behalf of a user.
+     * @param asset The address of the borrowed asset.
+     * @param amount The maximum amount to repay.
+     * @param onBehalfOf The account whose debt is repaid.
+     */
+    function repay(address asset, uint256 amount, address onBehalfOf) external override nonReentrant {
+        _repay(asset, amount, onBehalfOf, false);
+    }
+
+    /**
+     * @notice Repays borrowed assets using the caller's liquidity tokens.
+     * @param asset The address of the borrowed asset.
+     * @param amount The maximum amount to repay.
+     */
+    function repayWithLiquidityTokens(address asset, uint256 amount) external override nonReentrant {
+        _repay(asset, amount, msg.sender, true);
     }
 
     /**
@@ -236,6 +268,46 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Repays debt for a borrower using underlying assets or liquidity tokens.
+     * @dev Transfers the underlying asset to the pool, updates reserve state,
+     *      recalculates interest rates, and burns debt tokens.
+     * @param asset The address of the borrowed asset.
+     * @param amount The maximum amount to repay.
+     * @param onBehalfOf The account whose debt is being repaid.
+     * @param useLiquidityTokens Whether to repay with liquidity tokens.
+     */
+    function _repay(address asset, uint256 amount, address onBehalfOf, bool useLiquidityTokens) internal {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+        DataTypes.ReserveCache memory reserveCache = reserve.cache();
+
+        reserve.updateState(reserveCache);
+
+        uint256 debtToRepay;
+        uint256 userDebt = IDebtToken(reserveCache.debtTokenAddress).balanceOf(onBehalfOf);
+        if (userDebt < amount) {
+            debtToRepay = userDebt;
+        } else {
+            debtToRepay = amount;
+        }
+
+        uint256 scaledDebt = debtToRepay.rayDivFloor(reserveCache.nextBorrowIndex);
+        reserveCache.validateRepay(scaledDebt);
+
+        _burnDebtToken(reserveCache.debtTokenAddress, msg.sender, reserve.id, scaledDebt);
+        if (useLiquidityTokens) {
+            uint256 scaledLiquidity = debtToRepay.rayDivFloor(reserveCache.nextLiquidityIndex);
+
+            reserve.updateInterestRates(reserveCache, 0, 0, sInterestRateParams[asset]);
+            _burnLiquidityToken(reserveCache.liquidityTokenAddress, onBehalfOf, reserve.id, scaledLiquidity);
+        } else {
+            reserve.updateInterestRates(reserveCache, debtToRepay, 0, sInterestRateParams[asset]);
+            IERC20(asset).safeTransferFrom(msg.sender, address(this), debtToRepay);
+        }
+
+        emit Repay(asset, onBehalfOf, msg.sender, debtToRepay, useLiquidityTokens);
+    }
+
+    /**
      * @notice Sets whether a reserve can be used as collateral by a user.
      * @param user The address of the user.
      * @param reserveId The ID of the reserve.
@@ -307,6 +379,34 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
             // casting to 'uint256' is safe because OracleLib guarantees a non-negative answer
             // forge-lint: disable-next-line(unsafe-typecast)
             return (usdAmount * 10 ** feed.tokenDecimals * 10 ** (feed.feedDecimals - 18)) / (uint256(price));
+        }
+    }
+
+    /**
+     * @notice Burns liquidity tokens and updates the collateral status if the balance becomes zero
+     * @param liquidityToken The address of the liquidity token to burn
+     * @param reserveId The ID of the reserve for which to update collateral status
+     * @param scaledLiquidity The amount of liquidity tokens to burn
+     */
+    function _burnLiquidityToken(address liquidityToken, address user, uint256 reserveId, uint256 scaledLiquidity)
+        internal
+    {
+        bool zeroBalance = ILiquidityToken(liquidityToken).burn(user, scaledLiquidity);
+        if (zeroBalance) {
+            _setUseAsCollateral(user, reserveId, false);
+        }
+    }
+
+    /**
+     * @notice Burns debt tokens and updates the borrowing status if the balance becomes zero
+     * @param debtToken The address of the debt token to burn
+     * @param reserveId The ID of the reserve for which to update borrowing status
+     * @param scaledDebt The amount of debt tokens to burn
+     */
+    function _burnDebtToken(address debtToken, address user, uint256 reserveId, uint256 scaledDebt) internal {
+        bool zeroDebt = IDebtToken(debtToken).burn(user, scaledDebt);
+        if (zeroDebt) {
+            _setAsBorrowing(user, reserveId, false);
         }
     }
 }
