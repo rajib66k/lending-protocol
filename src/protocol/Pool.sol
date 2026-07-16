@@ -19,14 +19,15 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  * @title Pool
  * @author Rajib Kumar Pradhan
  * @notice Core lending pool contract responsible for handling user interactions.
- * @dev Currently implements the supply operation. Additional functionality such as withdrawals,
- *      borrowing, repayment, and liquidation will be added incrementally.
+ * @dev Currently implements the supply, withdrawals,
+ *      borrowing, repayment operations, and liquidation will be added incrementally.
  */
 abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     using ReserveLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
     using ValidationLogic for uint256;
+    using ValidationLogic for bool;
     using OracleLib for AggregatorV3Interface;
     using Math for uint256;
     using SafeERC20 for IERC20;
@@ -161,6 +162,19 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function repayWithLiquidityTokens(address asset, uint256 amount) external override nonReentrant {
         _repay(asset, amount, msg.sender, true);
+    }
+
+    function transferLiquidityToken(address asset, address to, uint256 amount) external override nonReentrant {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+        DataTypes.ReserveCache memory reserveCache = reserve.cache();
+
+        reserve.updateState(reserveCache);
+
+        uint256 scaledAmount = amount.rayDiv(reserveCache.nextLiquidityIndex);
+        uint256 healthFactorAfter = _healthFactor(msg.sender, asset, amount, address(0), 0);
+        reserveCache.validateTransferLiquidityToken(msg.sender, scaledAmount, healthFactorAfter);
+
+        _transferLiquidityToken(reserveCache.liquidityTokenAddress, msg.sender, to, scaledAmount, reserve.id);
     }
 
     /**
@@ -305,6 +319,22 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         }
 
         emit Repay(asset, onBehalfOf, msg.sender, debtToRepay, useLiquidityTokens);
+    }
+
+    function _transferLiquidityToken(
+        address liquidityTokenAddress,
+        address from,
+        address to,
+        uint256 scaledAmount,
+        uint256 reserveId
+    ) internal {
+        scaledAmount.validateTransferLiquidityTokenInternal(from, liquidityTokenAddress);
+
+        bool success = ILiquidityToken(liquidityTokenAddress).transferOnBehalf(from, to, scaledAmount);
+        if (ILiquidityToken(liquidityTokenAddress).balanceOf(from) == 0) {
+            _setUseAsCollateral(from, reserveId, false);
+        }
+        success.validateTransferLiquidityTokenSuccessful();
     }
 
     /**

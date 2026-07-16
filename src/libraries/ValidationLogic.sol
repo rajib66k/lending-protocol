@@ -22,6 +22,7 @@ library ValidationLogic {
     error ValidationLogic__AlreadyBorrowingIs(bool borrowing);
     error ValidationLogic__UnderlyingBalanceIsZero();
     error ValidationLogic__NotUsingAsCollateral();
+    error ValidationLogic__TransferFailed();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
@@ -110,6 +111,24 @@ library ValidationLogic {
     }
 
     /**
+     * @notice Validates the transfer of liquidity tokens.
+     * @param reserveCache Cached reserve data required for validation.
+     * @param from The address tokens are transferred from.
+     * @param scaledDebt The scaled debt of the user.
+     * @param healthFactorAfter The user's health factor after the action.
+     */
+    function validateTransferLiquidityToken(
+        DataTypes.ReserveCache memory reserveCache,
+        address from,
+        uint256 scaledDebt,
+        uint256 healthFactorAfter
+    ) internal view {
+        validateReserveActive(reserveCache);
+        validateUserHealthFactorAfterAction(healthFactorAfter);
+        validateTransferLiquidityTokenInternal(scaledDebt, reserveCache.liquidityTokenAddress, from);
+    }
+
+    /**
      * @notice Validates that an amount is greater than zero.
      * @param amount The amount to validate.
      */
@@ -181,5 +200,27 @@ library ValidationLogic {
         if (borrowing == userConfig.isBorrowing(reserveId)) {
             revert ValidationLogic__AlreadyBorrowingIs(borrowing);
         }
+    }
+
+    /**
+     * @notice Validates the internal transfer of liquidity tokens.
+     * @param scaledDebt The scaled debt of the user.
+     * @param liquidityTokenAddress The address of the liquidity token.
+     * @param from The address of the user transferring the tokens.
+     */
+    function validateTransferLiquidityTokenInternal(uint256 scaledDebt, address liquidityTokenAddress, address from)
+        internal
+        view
+    {
+        validateAmount(scaledDebt);
+        validateUserHaveEnoughBalance(ILiquidityToken(liquidityTokenAddress).scaledBalanceOf(from), scaledDebt);
+    }
+
+    /**
+     * @notice Validates the successful transfer of liquidity tokens.
+     * @param success The success status of the transfer.
+     */
+    function validateTransferLiquidityTokenSuccessful(bool success) internal pure {
+        if (!success) revert ValidationLogic__TransferFailed();
     }
 }
