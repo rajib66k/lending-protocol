@@ -164,6 +164,12 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         _repay(asset, amount, msg.sender, true);
     }
 
+    /**
+     * @notice Transfers liquidity tokens from the caller to another user.
+     * @param asset The address of the liquidity token.
+     * @param to The address of the user receiving the tokens.
+     * @param amount The amount of tokens to transfer.
+     */
     function transferLiquidityToken(address asset, address to, uint256 amount) external override nonReentrant {
         DataTypes.ReserveData storage reserve = sReserves[asset];
         DataTypes.ReserveCache memory reserveCache = reserve.cache();
@@ -321,6 +327,14 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         emit Repay(asset, onBehalfOf, msg.sender, debtToRepay, useLiquidityTokens);
     }
 
+    /**
+     * @notice Transfers liquidity tokens from one user to another.
+     * @param liquidityTokenAddress The address of the liquidity token.
+     * @param from The address of the user transferring the tokens.
+     * @param to The address of the user receiving the tokens.
+     * @param scaledAmount The amount of tokens to transfer.
+     * @param reserveId The ID of the reserve.
+     */
     function _transferLiquidityToken(
         address liquidityTokenAddress,
         address from,
