@@ -19,8 +19,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  * @title Pool
  * @author Rajib Kumar Pradhan
  * @notice Core lending pool contract responsible for handling user interactions.
- * @dev Currently implements the supply, withdrawals,
- *      borrowing, repayment operations, and liquidation will be added incrementally.
+ * @dev Currently implements the supply, withdrawals, borrowing, repayment, and liquidation operations.
  */
 abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     using ReserveLogic for DataTypes.ReserveData;
@@ -51,6 +50,9 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     /// @dev Maximum number of reserves supported by the protocol.
     uint256 internal constant MAX_RESERVE_LENGTH = 128;
 
+    /// @dev Maximum debt coverage allowed during liquidation, expressed in basis points (50%).
+    uint256 internal constant CLOSE_FACTOR = 5000;
+
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
 
@@ -63,6 +65,17 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     /// @notice Emitted when a user repays borrowed assets to the pool.
     event Repay(
         address indexed reserve, address indexed user, address indexed repayer, uint256 amount, bool useATokens
+    );
+
+    /// @notice Emitted when a user is liquidated.
+    event LiquidationCall(
+        address indexed collateralAsset,
+        address indexed debtAsset,
+        address indexed user,
+        address liquidator,
+        uint256 debtRepaid,
+        uint256 collateralLiquidated,
+        bool receiveATokens
     );
 
     constructor() Ownable(msg.sender) {}
@@ -162,6 +175,49 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function repayWithLiquidityTokens(address asset, uint256 amount) external override nonReentrant {
         _repay(asset, amount, msg.sender, true);
+    }
+
+    /**
+     * @notice Initiates a liquidation call for a user's borrowed assets.
+     * @dev Transfers the underlying debt asset from the liquidator, updates reserve states,
+     *      recalculates interest rates, burns the user's debt tokens, and either transfers
+     *      the collateral to the liquidator or transfers liquidity tokens based on `receiveLiquidityToken`.
+     * @param collateralAsset The address of the collateral asset.
+     * @param debtAsset The address of the debt asset.
+     * @param user The address of the user being liquidated.
+     * @param debtToCover The amount of debt to cover.
+     * @param receiveLiquidityToken Whether to receive liquidity tokens as a result of the liquidation.
+     */
+    function liquidationCall(
+        address collateralAsset,
+        address debtAsset,
+        address user,
+        uint256 debtToCover,
+        bool receiveLiquidityToken
+    ) external nonReentrant {
+        DataTypes.ReserveData storage reserveCollateral = sReserves[collateralAsset];
+        DataTypes.ReserveData storage reserveDebt = sReserves[debtAsset];
+        DataTypes.ReserveCache memory collateralCache = reserveCollateral.cache();
+        DataTypes.ReserveCache memory debtCache = reserveDebt.cache();
+
+        reserveCollateral.updateState(collateralCache);
+        reserveDebt.updateState(debtCache);
+
+        collateralCache.validateLiquidation(
+            debtCache, sUserConfig[user], user, reserveCollateral.id, _healthFactor(user, address(0), 0, address(0), 0)
+        );
+
+        _executeLiquidation(
+            collateralAsset,
+            debtAsset,
+            user,
+            debtToCover,
+            reserveCollateral,
+            reserveDebt,
+            collateralCache,
+            debtCache,
+            receiveLiquidityToken
+        );
     }
 
     /**
@@ -325,6 +381,92 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         }
 
         emit Repay(asset, onBehalfOf, msg.sender, debtToRepay, useLiquidityTokens);
+    }
+
+    /**
+     * @notice Executes a liquidation call for a user's borrowed assets.
+     * @param collateralAsset The address of the collateral asset.
+     * @param debtAsset The address of the debt asset.
+     * @param user The address of the user being liquidated.
+     * @param debtToCover The amount of debt to cover.
+     * @param reserveCollateral The reserve data for the collateral asset.
+     * @param reserveDebt The reserve data for the debt asset.
+     * @param collateralCache The cache for the collateral asset.
+     * @param debtCache The cache for the debt asset.
+     * @param receiveLiquidityToken Whether to receive liquidity tokens as a result of the liquidation.
+     */
+    function _executeLiquidation(
+        address collateralAsset,
+        address debtAsset,
+        address user,
+        uint256 debtToCover,
+        DataTypes.ReserveData storage reserveCollateral,
+        DataTypes.ReserveData storage reserveDebt,
+        DataTypes.ReserveCache memory collateralCache,
+        DataTypes.ReserveCache memory debtCache,
+        bool receiveLiquidityToken
+    ) internal {
+        (uint256 debtToRepay, uint256 collateralToSeize) = _calculateLiquidationAmounts(
+            collateralAsset, debtAsset, user, debtToCover, collateralCache, debtCache
+        );
+        uint256 scaledCollateral = collateralToSeize.rayDivCeil(collateralCache.nextLiquidityIndex);
+
+        reserveDebt.updateInterestRates(debtCache, debtToRepay, 0, sInterestRateParams[debtAsset]);
+        IERC20(debtAsset).safeTransferFrom(msg.sender, address(this), debtToRepay);
+        _burnDebtToken(
+            debtCache.debtTokenAddress, user, reserveDebt.id, debtToRepay.rayDivFloor(debtCache.nextBorrowIndex)
+        );
+
+        if (!receiveLiquidityToken) {
+            reserveCollateral.updateInterestRates(
+                collateralCache, 0, collateralToSeize, sInterestRateParams[collateralAsset]
+            );
+            _burnLiquidityToken(collateralCache.liquidityTokenAddress, user, reserveCollateral.id, scaledCollateral);
+            IERC20(collateralAsset).safeTransfer(msg.sender, collateralToSeize);
+        } else {
+            _transferLiquidityToken(
+                collateralCache.liquidityTokenAddress, user, msg.sender, scaledCollateral, reserveCollateral.id
+            );
+        }
+
+        emit LiquidationCall(
+            collateralAsset, debtAsset, user, msg.sender, debtToRepay, collateralToSeize, receiveLiquidityToken
+        );
+    }
+
+    /**
+     * @notice Calculates the amounts of debt to repay and collateral to seize during liquidation.
+     * @param collateralAsset The address of the collateral asset.
+     * @param debtAsset The address of the debt asset.
+     * @param user The address of the user being liquidated.
+     * @param debtToCover The amount of debt to cover.
+     * @param collateralCache The cache for the collateral asset.
+     * @param debtCache The cache for the debt asset.
+     * @return debtToRepay The amount of debt to repay.
+     * @return collateralToSeize The amount of collateral to seize.
+     */
+    function _calculateLiquidationAmounts(
+        address collateralAsset,
+        address debtAsset,
+        address user,
+        uint256 debtToCover,
+        DataTypes.ReserveCache memory collateralCache,
+        DataTypes.ReserveCache memory debtCache
+    ) internal view returns (uint256 debtToRepay, uint256 collateralToSeize) {
+        uint256 maxDebtToCover = IDebtToken(debtCache.debtTokenAddress).balanceOf(user).percentageMul(CLOSE_FACTOR);
+
+        debtToRepay = debtToCover > maxDebtToCover ? maxDebtToCover : debtToCover;
+        uint256 debtWithBonus = debtToRepay + debtToRepay.percentageMul(collateralCache.liquidationBonus);
+        collateralToSeize = _tokenAmountFromUsd(collateralAsset, _usdValue(debtAsset, debtWithBonus));
+        uint256 userCollateral = ILiquidityToken(collateralCache.liquidityTokenAddress).balanceOf(user);
+
+        if (collateralToSeize > userCollateral) {
+            collateralToSeize = userCollateral;
+            uint256 collateralUsd = _usdValue(collateralAsset, userCollateral);
+            uint256 debtUsd = collateralUsd.percentageDiv(Math.PERCENTAGE_FACTOR + collateralCache.liquidationBonus);
+
+            debtToRepay = _tokenAmountFromUsd(debtAsset, debtUsd);
+        }
     }
 
     /**

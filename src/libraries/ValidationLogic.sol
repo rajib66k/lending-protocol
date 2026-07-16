@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {DataTypes} from "../types/DataTypes.sol";
 import {ILiquidityToken} from "../interfaces/ILiquidityToken.sol";
+import {IDebtToken} from "../interfaces/IDebtToken.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {UserConfiguration} from "../configuration/UserConfiguration.sol";
 
@@ -23,6 +24,7 @@ library ValidationLogic {
     error ValidationLogic__UnderlyingBalanceIsZero();
     error ValidationLogic__NotUsingAsCollateral();
     error ValidationLogic__TransferFailed();
+    error ValidationLogic__NoDebtOfSelectedType();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
@@ -96,6 +98,32 @@ library ValidationLogic {
     function validateRepay(DataTypes.ReserveCache memory reserveCache, uint256 scaledDebt) internal pure {
         validateReserveActive(reserveCache);
         validateAmount(scaledDebt);
+    }
+
+    /**
+     * @notice Validates whether a liquidation operation can be executed.
+     * @param collateralCache The cache for the collateral asset.
+     * @param debtCache The cache for the debt asset.
+     * @param userConfig The user's configuration.
+     * @param user The address of the user being liquidated.
+     * @param collateralReserveId The ID of the collateral reserve.
+     * @param healthFactorAfter The user's health factor after the action.
+     */
+    function validateLiquidation(
+        DataTypes.ReserveCache memory collateralCache,
+        DataTypes.ReserveCache memory debtCache,
+        DataTypes.UserConfiguration storage userConfig,
+        address user,
+        uint256 collateralReserveId,
+        uint256 healthFactorAfter
+    ) internal view {
+        validateReserveActive(collateralCache);
+        validateReserveActive(debtCache);
+        validateUserHealthFactorAfterAction(healthFactorAfter);
+        if (!userConfig.isCollateral(collateralReserveId)) revert ValidationLogic__NotUsingAsCollateral();
+        if (IDebtToken(debtCache.debtTokenAddress).balanceOf(user) == 0) {
+            revert ValidationLogic__NoDebtOfSelectedType();
+        }
     }
 
     /**
