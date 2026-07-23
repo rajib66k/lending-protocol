@@ -66,29 +66,39 @@ library ReserveLogic {
      * @param liquidationThreshold The maximum collateralization threshold used for liquidation checks.
      * @param liquidationBonus The bonus applied to liquidators when liquidating collateral.
      * @param reserveFactor The portion of interest allocated to the protocol treasury.
+     * @param id The unique identifier for the reserve in the reserves list.
      */
     function initReserve(
         DataTypes.ReserveData storage reserve,
         address liquidityTokenAddress,
         address debtTokenAddress,
-        uint16 liquidationThreshold,
-        uint16 liquidationBonus,
-        uint16 reserveFactor
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        uint256 reserveFactor,
+        uint256 id
     ) internal {
-        if (reserve.liquidityTokenAddress != address(0)) {
-            revert ReserveAlreadyInitialized();
-        }
-
         reserve.liquidityIndex = Math.RAY.toUint128();
         reserve.borrowIndex = Math.RAY.toUint128();
         reserve.liquidityTokenAddress = liquidityTokenAddress;
         reserve.debtTokenAddress = debtTokenAddress;
 
-        reserve.liquidationThreshold = liquidationThreshold;
-        reserve.liquidationBonus = liquidationBonus;
-        reserve.reserveFactor = reserveFactor;
+        reserve.liquidationThreshold = liquidationThreshold.toUint16();
+        reserve.liquidationBonus = liquidationBonus.toUint16();
+        reserve.reserveFactor = reserveFactor.toUint16();
+        reserve.id = id.toUint16();
 
         reserve.isActive = true;
+    }
+
+    function updateReserve(
+        DataTypes.ReserveData storage reserve,
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        uint256 reserveFactor
+    ) internal {
+        reserve.liquidationThreshold = liquidationThreshold.toUint16();
+        reserve.liquidationBonus = liquidationBonus.toUint16();
+        reserve.reserveFactor = reserveFactor.toUint16();
     }
 
     /**

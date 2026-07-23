@@ -47,11 +47,41 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     /// @notice User collateral and borrowing configuration.
     mapping(address user => DataTypes.UserConfiguration) internal sUserConfig;
 
+    /// @notice Total number of reserves supported by the protocol.
+    uint256 internal sReserveCount;
+
     /// @dev Maximum number of reserves supported by the protocol.
     uint256 internal constant MAX_RESERVE_LENGTH = 128;
 
     /// @dev Maximum debt coverage allowed during liquidation, expressed in basis points (50%).
     uint256 internal constant CLOSE_FACTOR = 5000;
+
+    /// @notice Emitted when a reserve initialization is completed.
+    event ReserveInitialized(
+        address indexed asset,
+        address indexed liquidityToken,
+        address indexed debtToken,
+        DataTypes.InterestRateParams params,
+        DataTypes.FeedData feed,
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        uint256 reserveFactor,
+        uint256 id
+    );
+
+    /// @notice Emitted when a reserve's active status is updated.
+    event ReserveStatusUpdated(address indexed asset, bool isActive);
+
+    /// @notice Emitted when a intrest rate params is updated.
+    event InterestRateParamsUpdated(address indexed asset, DataTypes.InterestRateParams params);
+
+    /// @notice Emitted when a feed data is updated.
+    event FeedDataUpdated(address indexed asset, DataTypes.FeedData feed);
+
+    /// @notice Emitted when a reserve data is updated.
+    event ReserveDataUpdated(
+        address indexed asset, uint256 liquidationThreshold, uint256 liquidationBonus, uint256 reserveFactor
+    );
 
     /// @notice Emitted when a user supplies assets to the pool.
     event Supply(address indexed asset, address user, address indexed onBehalfOf, uint256 amount);
@@ -79,6 +109,132 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
     );
 
     constructor() Ownable(msg.sender) {}
+
+    /**
+     * @notice Initializes a new reserve in the lending pool.
+     * @dev Can only be called by the contract owner. Initializes reserve data, interest rate parameters, and price feed configuration.
+     * @param asset The address of the underlying asset for the reserve.
+     * @param liquidityTokenAddress The address of the liquidity token associated with the reserve.
+     * @param debtTokenAddress The address of the debt token associated with the reserve.
+     * @param liquidationThreshold The liquidation threshold for the reserve, expressed in basis points.
+     * @param liquidationBonus The liquidation bonus for the reserve, expressed in basis points.
+     * @param reserveFactor The reserve factor for the reserve, expressed in basis points.
+     * @param params The interest rate parameters for the reserve.
+     * @param feed The price feed configuration for the reserve.
+     * @dev Emits a ReserveInitialized event upon successful initialization.
+     * @dev The reserve ID is automatically assigned based on the current reserve count.
+     * @dev The reserve is added to the reserves list for easy enumeration.
+     * @dev The reserve is marked as active upon initialization.
+     */
+    function initializeReserve(
+        address asset,
+        address liquidityTokenAddress,
+        address debtTokenAddress,
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        uint256 reserveFactor,
+        DataTypes.InterestRateParams calldata params,
+        DataTypes.FeedData calldata feed
+    ) external onlyOwner {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        sReserveCount.validateReserveInit(asset, liquidityTokenAddress, debtTokenAddress);
+
+        uint256 id = sReserveCount;
+
+        sInterestRateParams[asset] = params;
+        sFeeds[asset] = feed;
+        sReservesList[id] = asset;
+        reserve.initReserve(
+            liquidityTokenAddress, debtTokenAddress, liquidationThreshold, liquidationBonus, reserveFactor, id
+        );
+
+        emit ReserveInitialized(
+            asset,
+            liquidityTokenAddress,
+            debtTokenAddress,
+            params,
+            feed,
+            liquidationThreshold,
+            liquidationBonus,
+            reserveFactor,
+            id
+        );
+
+        ++sReserveCount;
+    }
+
+    /**
+     * @notice Updates the active status of a reserve.
+     * @dev Can only be called by the contract owner. Validates the status change and emits a ReserveStatusUpdated event.
+     * @param asset The address of the reserve asset.
+     * @param active The new active status for the reserve.
+     * @dev Emits a ReserveStatusUpdated event upon successful status change.
+     */
+    function updateReserveActive(address asset, bool active) external onlyOwner {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        reserve.validateReserveActiveStatusChange(active);
+
+        sReserves[asset].isActive = active;
+        emit ReserveStatusUpdated(asset, active);
+    }
+
+    /**
+     * @notice Updates the interest rate parameters for a reserve.
+     * @dev Can only be called by the contract owner. Updates the interest rate parameters for the specified reserve asset.
+     * @param asset The address of the reserve asset.
+     * @param params The new interest rate parameters for the reserve.
+     * @dev Emits a InterestRateParamsUpdated event upon successful update.
+     */
+    function updateInterestRateParams(address asset, DataTypes.InterestRateParams calldata params) external onlyOwner {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        reserve.validateReserveExists();
+
+        sInterestRateParams[asset] = params;
+        emit InterestRateParamsUpdated(asset, params);
+    }
+
+    /**
+     * @notice Updates the price feed configuration for a reserve.
+     * @dev Can only be called by the contract owner. Updates the price feed configuration for the specified reserve asset.
+     * @param asset The address of the reserve asset.
+     * @param feed The new price feed configuration for the reserve.
+     * @dev Emits a FeedDataUpdated event upon successful update.
+     */
+    function updateFeedData(address asset, DataTypes.FeedData calldata feed) external onlyOwner {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        reserve.validateReserveExists();
+
+        sFeeds[asset] = feed;
+        emit FeedDataUpdated(asset, feed);
+    }
+
+    /**
+     * @notice Updates the liquidation configuration data for a reserve.
+     * @dev Can only be called by the contract owner. Updates the liquidation threshold,
+     * liquidation bonus, and reserve factor for the specified reserve asset.
+     * @param asset The address of the reserve asset.
+     * @param liquidationThreshold The new liquidation threshold for the reserve, expressed in basis points.
+     * @param liquidationBonus The new liquidation bonus for the reserve, expressed in basis points.
+     * @param reserveFactor The new reserve factor for the reserve, expressed in basis points.
+     * @dev Emits a ReserveConfigurationUpdated event upon successful update.
+     */
+    function updateReserveData(
+        address asset,
+        uint256 liquidationThreshold,
+        uint256 liquidationBonus,
+        uint256 reserveFactor
+    ) external onlyOwner {
+        DataTypes.ReserveData storage reserve = sReserves[asset];
+
+        reserve.validateReserveExists();
+
+        reserve.updateReserve(liquidationThreshold, liquidationBonus, reserveFactor);
+        emit ReserveDataUpdated(asset, liquidationThreshold, liquidationBonus, reserveFactor);
+    }
 
     /**
      * @notice Supplies assets to the lending pool.

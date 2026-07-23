@@ -25,10 +25,39 @@ library ValidationLogic {
     error ValidationLogic__NotUsingAsCollateral();
     error ValidationLogic__TransferFailed();
     error ValidationLogic__NoDebtOfSelectedType();
+    error ValidationLogic__InvalidAddress();
+    error ValidationLogic__TooManyReserves();
+    error ValidationLogic__ReserveIsActiveIsAlready(bool isActive);
+    error ValidationLogic__ReserveNotInitialized();
+    error ValidationLogic__ReserveDoesNotExist();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
     uint256 internal constant MIN_HEALTH_FACTOR = 1e18;
+
+    /**
+     * @notice Validates the initialization of a reserve.
+     * @param asset The address of the asset.
+     * @param liquidityTokenAddress The address of the liquidity token.
+     * @param debtTokenAddress The address of the debt token.
+     * @param reserveCount The current number of reserves.
+     */
+    function validateReserveInit(
+        uint256 reserveCount,
+        address asset,
+        address liquidityTokenAddress,
+        address debtTokenAddress
+    ) internal pure {
+        if (asset == address(0)) revert ValidationLogic__InvalidAddress();
+        if (liquidityTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
+        if (debtTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
+        if (reserveCount >= UserConfiguration.MAX_RESERVES) revert ValidationLogic__TooManyReserves();
+    }
+
+    function validateReserveActiveStatusChange(DataTypes.ReserveData storage reserve, bool isActive) internal view {
+        if (reserve.isActive == isActive) revert ValidationLogic__ReserveIsActiveIsAlready(isActive);
+        if (reserve.liquidityTokenAddress == address(0)) revert ValidationLogic__ReserveNotInitialized();
+    }
 
     /**
      * @notice Validates whether a supply operation can be executed.
@@ -250,5 +279,16 @@ library ValidationLogic {
      */
     function validateTransferLiquidityTokenSuccessful(bool success) internal pure {
         if (!success) revert ValidationLogic__TransferFailed();
+    }
+
+    /**
+     * @notice Validates that a reserve has been initialized.
+     * @dev Reverts if the reserve does not exist.
+     * @param reserve The reserve data to validate.
+     */
+    function validateReserveExists(DataTypes.ReserveData storage reserve) internal view {
+        if (reserve.liquidityTokenAddress == address(0)) {
+            revert ValidationLogic__ReserveDoesNotExist();
+        }
     }
 }
