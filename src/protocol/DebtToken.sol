@@ -27,8 +27,11 @@ contract DebtToken is ERC20, Ownable, IDebtToken {
     /**
      * @notice Creates a debt token linked to a specific reserve.
      * @dev The pool is used to fetch the current normalized debt index.
-     * @param poolAddress The address of the pool contract.
+     * @param tokenName Name of the debt token.
+     * @param symbol Symbol of the debt token.
+     * @param poolAddress Address of the lending pool contract.
      * @param asset The underlying asset this debt token represents.
+     * @param assetDecimals Decimals of the underlying asset.
      */
     constructor(string memory tokenName, string memory symbol, address poolAddress, address asset, uint8 assetDecimals)
         Ownable(msg.sender)
