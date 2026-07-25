@@ -28,14 +28,25 @@ contract LiquidityToken is ERC20, Ownable, ILiquidityToken {
     /**
      * @notice Creates a liquidity token linked to a specific reserve.
      * @dev The pool is used to fetch the current normalized liquidity index.
+     *      The treasury address receives reserve factor income minted by the token.
      * @param poolAddress The address of the pool contract.
      * @param asset The underlying asset this liquidity token represents.
+     * * @param tokenName Name of the liquidity token.
+     * @param symbol Symbol of the liquidity token.
+     * @param treasuryAddress Address receiving reserve factor rewards.
+     * @param poolAddress Address of the lending pool contract.
+     * @param asset Address of the underlying asset represented by this token.
+     * @param assetDecimals Decimals of the underlying asset.
      */
-    constructor(string memory tokenName, string memory symbol, address poolAddress, address asset, uint8 assetDecimals)
-        Ownable(msg.sender)
-        ERC20(tokenName, symbol)
-    {
-        treasury = msg.sender;
+    constructor(
+        string memory tokenName,
+        string memory symbol,
+        address treasuryAddress,
+        address poolAddress,
+        address asset,
+        uint8 assetDecimals
+    ) Ownable(msg.sender) ERC20(tokenName, symbol) {
+        treasury = treasuryAddress;
         pool = IPool(poolAddress);
         underlyingAsset = asset;
         tokenDecimals = assetDecimals;
