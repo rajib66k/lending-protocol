@@ -21,7 +21,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  * @notice Core lending pool contract responsible for handling user interactions.
  * @dev Currently implements the supply, withdrawals, borrowing, repayment, and liquidation operations.
  */
-abstract contract Pool is IPool, ReentrancyGuard, Ownable {
+contract Pool is IPool, ReentrancyGuard, Ownable {
     using ReserveLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveData;
     using ValidationLogic for DataTypes.ReserveCache;
@@ -364,10 +364,10 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
         );
 
         _executeLiquidation(
-            collateralAsset,
-            debtAsset,
             user,
             debtToCover,
+            collateralAsset,
+            debtAsset,
             reserveCollateral,
             reserveDebt,
             collateralCache,
@@ -552,10 +552,10 @@ abstract contract Pool is IPool, ReentrancyGuard, Ownable {
      * @param receiveLiquidityToken Whether to receive liquidity tokens as a result of the liquidation.
      */
     function _executeLiquidation(
-        address collateralAsset,
-        address debtAsset,
         address user,
         uint256 debtToCover,
+        address collateralAsset,
+        address debtAsset,
         DataTypes.ReserveData storage reserveCollateral,
         DataTypes.ReserveData storage reserveDebt,
         DataTypes.ReserveCache memory collateralCache,
