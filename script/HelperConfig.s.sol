@@ -78,7 +78,6 @@ contract HelperConfig is Script {
             optimalUsageRatio: 8e26, baseBorrowRate: 2e25, variableRateSlope1: 5e25, variableRateSlope2: 7e26
         });
 
-        vm.stopBroadcast();
         return NetworkConfig({
             asset: address(weth),
             liquidationThreshold: LIQUIDARION_THRESHOLD,

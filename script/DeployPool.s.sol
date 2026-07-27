@@ -10,8 +10,11 @@ import {DebtToken} from "../src/protocol/DebtToken.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployPool is Script {
-    function run() public returns (Pool pool, Treasury treasury, LiquidityToken lToken, DebtToken dToken) {
-        HelperConfig config = new HelperConfig();
+    function run()
+        public
+        returns (Pool pool, HelperConfig config, Treasury treasury, LiquidityToken lToken, DebtToken dToken)
+    {
+        config = new HelperConfig();
         HelperConfig.NetworkConfig memory netConfig = config.getActiveNetworkConfig();
 
         vm.startBroadcast(netConfig.deployerKey);
