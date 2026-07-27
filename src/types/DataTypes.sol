@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 /**
- * @title Math
+ * @title DataTypes
  * @author Rajib Kumar Pradhan
  * @notice Collection data types used throughout the lending protocol.
  */

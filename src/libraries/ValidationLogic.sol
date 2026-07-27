@@ -51,7 +51,7 @@ library ValidationLogic {
         if (asset == address(0)) revert ValidationLogic__InvalidAddress();
         if (liquidityTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
         if (debtTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
-        if (reserveCount >= UserConfiguration.MAX_RESERVES) revert ValidationLogic__TooManyReserves();
+        if (reserveCount > UserConfiguration.MAX_RESERVES) revert ValidationLogic__TooManyReserves();
     }
 
     function validateReserveActiveStatusChange(DataTypes.ReserveData storage reserve, bool isActive) internal view {
@@ -88,11 +88,11 @@ library ValidationLogic {
     ) internal view {
         validateReserveActive(reserveCache);
         validateAmount(scaledAmount);
+        validateUserHealthFactorAfterAction(healthFactorAfter);
+        validatePoolLiquidity(asset, amount);
         validateUserHaveEnoughBalance(
             ILiquidityToken(reserveCache.liquidityTokenAddress).scaledBalanceOf(user), scaledAmount
         );
-        validateUserHealthFactorAfterAction(healthFactorAfter);
-        validatePoolLiquidity(asset, amount);
     }
 
     /**
@@ -160,9 +160,12 @@ library ValidationLogic {
      * @param reserve The reserve data.
      * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
      */
-    function validateSetUseAsCollateral(DataTypes.ReserveData storage reserve, bool useAsCollateral) internal view {
+    function validateSetUseAsCollateral(DataTypes.ReserveData storage reserve, address user, bool useAsCollateral)
+        internal
+        view
+    {
         if (!reserve.isActive) revert ValidationLogic__ReserveInactive();
-        if (ILiquidityToken(reserve.liquidityTokenAddress).scaledBalanceOf(msg.sender) == 0 && useAsCollateral) {
+        if (ILiquidityToken(reserve.liquidityTokenAddress).scaledBalanceOf(user) == 0 && useAsCollateral) {
             revert ValidationLogic__UnderlyingBalanceIsZero();
         }
     }

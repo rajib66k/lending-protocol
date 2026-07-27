@@ -403,7 +403,7 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
     function setUseAsCollateral(address asset, bool useAsCollateral) public {
         DataTypes.ReserveData storage reserve = sReserves[asset];
 
-        reserve.validateSetUseAsCollateral(useAsCollateral);
+        reserve.validateSetUseAsCollateral(msg.sender, useAsCollateral);
 
         _setUseAsCollateral(msg.sender, reserve.id, useAsCollateral);
         uint256 hf = _healthFactor(msg.sender, address(0), 0, address(0), 0);
