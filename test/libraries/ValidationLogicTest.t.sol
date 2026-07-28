@@ -68,10 +68,6 @@ contract ValidationLogicTest is Test {
         MAX_RESERVES_PLUS_ONE.validateReserveInit(sToken, sToken, sToken);
     }
 
-    function testValidateReserveInitSuccess() public view {
-        MAX_RESERVES.validateReserveInit(sToken, sToken, sToken);
-    }
-
     function testValidateReserveInitSuccessAtMaxMinusOne() public view {
         (MAX_RESERVES - 1).validateReserveInit(sToken, sToken, sToken);
     }
@@ -106,7 +102,7 @@ contract ValidationLogicTest is Test {
         reserve.isActive = true;
         reserve.liquidityTokenAddress = address(0);
 
-        vm.expectRevert(ValidationLogic.ValidationLogic__ReserveNotInitialized.selector);
+        vm.expectRevert(ValidationLogic.ValidationLogic__ReserveDoesNotExist.selector);
         reserve.validateReserveActiveStatusChange(false);
     }
 

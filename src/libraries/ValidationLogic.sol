@@ -51,12 +51,12 @@ library ValidationLogic {
         if (asset == address(0)) revert ValidationLogic__InvalidAddress();
         if (liquidityTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
         if (debtTokenAddress == address(0)) revert ValidationLogic__InvalidAddress();
-        if (reserveCount > UserConfiguration.MAX_RESERVES) revert ValidationLogic__TooManyReserves();
+        if (reserveCount >= UserConfiguration.MAX_RESERVES) revert ValidationLogic__TooManyReserves();
     }
 
     function validateReserveActiveStatusChange(DataTypes.ReserveData storage reserve, bool isActive) internal view {
         if (reserve.isActive == isActive) revert ValidationLogic__ReserveIsActiveIsAlready(isActive);
-        if (reserve.liquidityTokenAddress == address(0)) revert ValidationLogic__ReserveNotInitialized();
+        validateReserveExists(reserve);
     }
 
     /**

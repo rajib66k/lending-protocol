@@ -751,4 +751,20 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
             _setAsBorrowing(user, reserveId, false);
         }
     }
+
+    function getReserveData(address asset) public view returns (DataTypes.ReserveData memory) {
+        return sReserves[asset];
+    }
+
+    function getReserveCount() public view returns (uint256) {
+        return sReserveCount;
+    }
+
+    function getInterestRateParams(address asset) public view returns (DataTypes.InterestRateParams memory) {
+        return sInterestRateParams[asset];
+    }
+
+    function getFeedData(address asset) public view returns (DataTypes.FeedData memory) {
+        return sFeeds[asset];
+    }
 }
