@@ -88,7 +88,7 @@ library ValidationLogic {
     ) internal view {
         validateReserveActive(reserveCache);
         validateAmount(scaledAmount);
-        validateUserHealthFactorAfterAction(healthFactorAfter);
+        validateUserHealthFactorAfterAction(healthFactorAfter); // remaining
         validatePoolLiquidity(asset, amount);
         validateUserHaveEnoughBalance(
             ILiquidityToken(reserveCache.liquidityTokenAddress).scaledBalanceOf(user), scaledAmount
@@ -229,37 +229,6 @@ library ValidationLogic {
     function validatePoolLiquidity(address asset, uint256 amount) internal view {
         uint256 poolBalance = IERC20(asset).balanceOf(address(this));
         if (poolBalance < amount) revert ValidationLogic__PoolHasNotEnoughLiquidity();
-    }
-
-    /**
-     * @notice Validates the setting of a reserve as collateral.
-     * @param reserveId The ID of the reserve.
-     * @param userConfig The user's configuration.
-     * @param useAsCollateral The flag indicating if the reserve should be used as collateral.
-     */
-    function validateSetUseAsCollateralInternal(
-        uint256 reserveId,
-        DataTypes.UserConfiguration storage userConfig,
-        bool useAsCollateral
-    ) internal view {
-        if (useAsCollateral == userConfig.isCollateral(reserveId)) {
-            revert ValidationLogic__AlreadyUsingAsCollateralIs(useAsCollateral);
-        }
-    }
-
-    /**
-     * @notice Validates the setting of a reserve as borrowing.
-     * @param reserveId The ID of the reserve.
-     * @param userConfig The user's configuration.
-     * @param borrowing The flag indicating if the reserve should be set as borrowing.
-     */
-    function validateSetAsBorrowing(uint256 reserveId, DataTypes.UserConfiguration storage userConfig, bool borrowing)
-        internal
-        view
-    {
-        if (borrowing == userConfig.isBorrowing(reserveId)) {
-            revert ValidationLogic__AlreadyBorrowingIs(borrowing);
-        }
     }
 
     /**

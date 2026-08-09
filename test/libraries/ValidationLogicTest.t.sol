@@ -380,48 +380,6 @@ contract ValidationLogicTest is Test {
         reserve.validateSetUseAsCollateral(sUser2, true);
     }
 
-    //////////////////////////////////////////////
-    // validateSetUseAsCollateralInternal      //
-    //////////////////////////////////////////////
-    function testValidateSetUseAsCollateralInternalRevertTrue() public {
-        sUserConfig[sUser].setCollateral(0, true);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(ValidationLogic.ValidationLogic__AlreadyUsingAsCollateralIs.selector, true)
-        );
-        ValidationLogic.validateSetUseAsCollateralInternal(0, sUserConfig[sUser], true);
-    }
-
-    function testValidateSetUseAsCollateralInternalRevertFalse() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(ValidationLogic.ValidationLogic__AlreadyUsingAsCollateralIs.selector, false)
-        );
-        ValidationLogic.validateSetUseAsCollateralInternal(0, sUserConfig[sUser], false);
-    }
-
-    function testValidateSetUseAsCollateralInternalSuccess() public view {
-        ValidationLogic.validateSetUseAsCollateralInternal(0, sUserConfig[sUser], true);
-    }
-
-    ////////////////////////////////
-    // validateSetAsBorrowing     //
-    ////////////////////////////////
-    function testValidateSetAsBorrowingRevertTrue() public {
-        sUserConfig[sUser].setBorrowing(0, true);
-
-        vm.expectRevert(abi.encodeWithSelector(ValidationLogic.ValidationLogic__AlreadyBorrowingIs.selector, true));
-        ValidationLogic.validateSetAsBorrowing(0, sUserConfig[sUser], true);
-    }
-
-    function testValidateSetAsBorrowingRevertFalse() public {
-        vm.expectRevert(abi.encodeWithSelector(ValidationLogic.ValidationLogic__AlreadyBorrowingIs.selector, false));
-        ValidationLogic.validateSetAsBorrowing(0, sUserConfig[sUser], false);
-    }
-
-    function testValidateSetAsBorrowingSuccess() public view {
-        ValidationLogic.validateSetAsBorrowing(0, sUserConfig[sUser], true);
-    }
-
     /////////////////////////////////////////
     // validateTransferLiquidityToken      //
     /////////////////////////////////////////

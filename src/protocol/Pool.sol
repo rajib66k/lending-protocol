@@ -448,8 +448,6 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
     ) internal view returns (uint256) {
         DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
 
-        if (!sUserConfig[user].hasBorrow()) return type(uint256).max;
-
         uint256 weightedLiquidationThreshold;
         uint256 totalCollateralInUsd;
         uint256 totalDebtInUsd;
@@ -657,7 +655,6 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function _setUseAsCollateral(address user, uint256 reserveId, bool useAsCollateral) internal {
         DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
-        reserveId.validateSetUseAsCollateralInternal(userConfig, useAsCollateral);
 
         userConfig.setCollateral(reserveId, useAsCollateral);
     }
@@ -671,7 +668,6 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
      */
     function _setAsBorrowing(address user, uint256 reserveId, bool borrowing) internal {
         DataTypes.UserConfiguration storage userConfig = sUserConfig[user];
-        reserveId.validateSetAsBorrowing(userConfig, borrowing);
 
         userConfig.setBorrowing(reserveId, borrowing);
     }

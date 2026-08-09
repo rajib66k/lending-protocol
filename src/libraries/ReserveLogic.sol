@@ -148,7 +148,7 @@ library ReserveLogic {
 
         uint256 nextTotalDebt = scaledDebtToken.rayDiv(reserveCache.nextBorrowIndex);
 
-        (uint256 nextLiquidityRate, uint256 nextBorrowRate) = nextTotalLiquidityPlusDebt.calculateInterestRates(
+        (uint256 nextBorrowRate, uint256 nextLiquidityRate) = nextTotalLiquidityPlusDebt.calculateInterestRates(
             nextTotalDebt, reserveCache.reserveFactor.toUint16(), interestRateParams
         );
 
