@@ -29,7 +29,7 @@ contract HelperConfig is Script {
 
     NetworkConfig public activeNetworkConfig;
 
-    uint8 public constant TOKEN_DECIMALS = 8;
+    uint8 public constant TOKEN_DECIMALS = 18;
     uint8 public constant FEED_DECIMALS = 8;
     int256 public constant ETH_USD_PRICE = 2000e8;
     int256 public constant BTC_USD_PRICE = 100000e8;
@@ -66,10 +66,10 @@ contract HelperConfig is Script {
         });
 
         ReserveConfig memory wethReserveConfig =
-            ReserveConfig({liquidationThreshold: 8000, liquidationBonus: 10000, reserveFactor: 1000});
+            ReserveConfig({liquidationThreshold: 8000, liquidationBonus: 1000, reserveFactor: 1000});
 
         ReserveConfig memory wbtcReserveConfig =
-            ReserveConfig({liquidationThreshold: 8000, liquidationBonus: 10000, reserveFactor: 1000});
+            ReserveConfig({liquidationThreshold: 8000, liquidationBonus: 1000, reserveFactor: 1000});
 
         return NetworkConfig({
             weth: 0xdd13E55209Fd76AfE204dBda4007C227904f0a81,

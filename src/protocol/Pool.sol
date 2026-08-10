@@ -390,7 +390,7 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
 
         uint256 scaledAmount = amount.rayDiv(reserveCache.nextLiquidityIndex);
         uint256 healthFactorAfter = _healthFactor(msg.sender, asset, amount, address(0), 0);
-        reserveCache.validateTransferLiquidityToken(msg.sender, scaledAmount, healthFactorAfter);
+        reserveCache.validateTransferLiquidityToken(healthFactorAfter);
 
         _transferLiquidityToken(reserveCache.liquidityTokenAddress, msg.sender, to, scaledAmount, reserve.id);
     }
@@ -638,7 +638,7 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
         uint256 scaledAmount,
         uint256 reserveId
     ) internal {
-        scaledAmount.validateTransferLiquidityTokenInternal(from, liquidityTokenAddress);
+        scaledAmount.validateTransferLiquidityTokenInternal(liquidityTokenAddress, from);
 
         bool success = ILiquidityToken(liquidityTokenAddress).transferOnBehalf(from, to, scaledAmount);
         if (ILiquidityToken(liquidityTokenAddress).balanceOf(from) == 0) {
@@ -746,6 +746,14 @@ contract Pool is IPool, ReentrancyGuard, Ownable {
         if (zeroDebt) {
             _setAsBorrowing(user, reserveId, false);
         }
+    }
+
+    function getUsdValue(address asset, uint256 amount) external view returns (uint256) {
+        return _usdValue(asset, amount);
+    }
+
+    function getTokenAmountFromUsd(address asset, uint256 usdAmount) external view returns (uint256) {
+        return _tokenAmountFromUsd(asset, usdAmount);
     }
 
     function getReserveData(address asset) public view returns (DataTypes.ReserveData memory) {

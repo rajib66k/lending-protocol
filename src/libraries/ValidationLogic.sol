@@ -30,6 +30,7 @@ library ValidationLogic {
     error ValidationLogic__ReserveIsActiveIsAlready(bool isActive);
     error ValidationLogic__ReserveNotInitialized();
     error ValidationLogic__ReserveDoesNotExist();
+    error ValidationLogic__HealthFactorNotBelowThreshold();
 
     using UserConfiguration for DataTypes.UserConfiguration;
 
@@ -136,7 +137,7 @@ library ValidationLogic {
      * @param userConfig The user's configuration.
      * @param user The address of the user being liquidated.
      * @param collateralReserveId The ID of the collateral reserve.
-     * @param healthFactorAfter The user's health factor after the action.
+     * @param healthFactor The user's health factor.
      */
     function validateLiquidation(
         DataTypes.ReserveCache memory collateralCache,
@@ -144,15 +145,15 @@ library ValidationLogic {
         DataTypes.UserConfiguration storage userConfig,
         address user,
         uint256 collateralReserveId,
-        uint256 healthFactorAfter
+        uint256 healthFactor
     ) internal view {
         validateReserveActive(collateralCache);
         validateReserveActive(debtCache);
-        validateUserHealthFactorAfterAction(healthFactorAfter);
         if (!userConfig.isCollateral(collateralReserveId)) revert ValidationLogic__NotUsingAsCollateral();
         if (IDebtToken(debtCache.debtTokenAddress).balanceOf(user) == 0) {
             revert ValidationLogic__NoDebtOfSelectedType();
         }
+        if (healthFactor >= MIN_HEALTH_FACTOR) revert ValidationLogic__HealthFactorNotBelowThreshold();
     }
 
     /**
@@ -173,19 +174,14 @@ library ValidationLogic {
     /**
      * @notice Validates the transfer of liquidity tokens.
      * @param reserveCache Cached reserve data required for validation.
-     * @param from The address tokens are transferred from.
-     * @param scaledDebt The scaled debt of the user.
      * @param healthFactorAfter The user's health factor after the action.
      */
-    function validateTransferLiquidityToken(
-        DataTypes.ReserveCache memory reserveCache,
-        address from,
-        uint256 scaledDebt,
-        uint256 healthFactorAfter
-    ) internal view {
+    function validateTransferLiquidityToken(DataTypes.ReserveCache memory reserveCache, uint256 healthFactorAfter)
+        internal
+        pure
+    {
         validateReserveActive(reserveCache);
         validateUserHealthFactorAfterAction(healthFactorAfter);
-        validateTransferLiquidityTokenInternal(scaledDebt, reserveCache.liquidityTokenAddress, from);
     }
 
     /**

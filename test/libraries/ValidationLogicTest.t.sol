@@ -388,7 +388,7 @@ contract ValidationLogicTest is Test {
         cache.isActive = false;
 
         vm.expectRevert(ValidationLogic.ValidationLogic__ReserveInactive.selector);
-        ValidationLogic.validateTransferLiquidityToken(cache, address(this), 1, ValidationLogic.MIN_HEALTH_FACTOR);
+        ValidationLogic.validateTransferLiquidityToken(cache, ValidationLogic.MIN_HEALTH_FACTOR);
     }
 
     function testValidateTransferLiquidityTokenRevertIfHealthFactorBroken() public {
@@ -396,7 +396,7 @@ contract ValidationLogicTest is Test {
         cache.isActive = true;
 
         vm.expectRevert(ValidationLogic.ValidationLogic__BreaksHealthFactor.selector);
-        ValidationLogic.validateTransferLiquidityToken(cache, address(this), 1, ValidationLogic.MIN_HEALTH_FACTOR - 1);
+        ValidationLogic.validateTransferLiquidityToken(cache, ValidationLogic.MIN_HEALTH_FACTOR - 1);
     }
 
     function testValidateTransferLiquidityTokenSuccess() public {
@@ -404,7 +404,7 @@ contract ValidationLogicTest is Test {
         cache.isActive = true;
         cache.liquidityTokenAddress = sLiquidityToken;
 
-        ValidationLogic.validateTransferLiquidityToken(cache, sUser2, 10, ValidationLogic.MIN_HEALTH_FACTOR);
+        ValidationLogic.validateTransferLiquidityToken(cache, ValidationLogic.MIN_HEALTH_FACTOR);
     }
 
     //////////////////////////////////////////////////
@@ -453,17 +453,6 @@ contract ValidationLogicTest is Test {
         ValidationLogic.validateLiquidation(collateralCache, debtCache, sUserConfig[sUser], address(this), 0, 1e18);
     }
 
-    function testValidateLiquidationRevertIfHealthFactorBroken() public {
-        DataTypes.ReserveCache storage collateralCache = sCache[sToken];
-        DataTypes.ReserveCache storage debtCache = sCache[address(1)];
-
-        collateralCache.isActive = true;
-        debtCache.isActive = true;
-
-        vm.expectRevert(ValidationLogic.ValidationLogic__BreaksHealthFactor.selector);
-        ValidationLogic.validateLiquidation(collateralCache, debtCache, sUserConfig[sUser], address(this), 0, 1e18 - 1);
-    }
-
     function testValidateLiquidationRevertIfReserveNotUsedAsCollateral() public {
         DataTypes.ReserveCache storage collateralCache = sCache[sToken];
         DataTypes.ReserveCache storage debtCache = sCache[address(1)];
@@ -472,6 +461,6 @@ contract ValidationLogicTest is Test {
         debtCache.isActive = true;
 
         vm.expectRevert(ValidationLogic.ValidationLogic__NotUsingAsCollateral.selector);
-        ValidationLogic.validateLiquidation(collateralCache, debtCache, sUserConfig[sUser], address(this), 0, 1e18);
+        ValidationLogic.validateLiquidation(collateralCache, debtCache, sUserConfig[sUser], address(this), 0, 1e18 - 1);
     }
 }

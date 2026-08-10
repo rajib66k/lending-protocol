@@ -69,6 +69,16 @@ contract PoolTest is Test {
         address indexed reserve, address indexed user, address indexed repayer, uint256 amount, bool useATokens
     );
 
+    event LiquidationCall(
+        address indexed collateralAsset,
+        address indexed debtAsset,
+        address indexed user,
+        address liquidator,
+        uint256 debtRepaid,
+        uint256 collateralLiquidated,
+        bool receiveATokens
+    );
+
     function setUp() public {
         deploy = new DeployPool();
 
@@ -696,5 +706,205 @@ contract PoolTest is Test {
         wrapAndUpdateFeed(20 days);
 
         supplyUpdateReserveTest(netConfig.weth, amount, user2, doRepayUser2);
+    }
+
+    /////////////////
+    // Price Tests //
+    /////////////////
+    function testGetUsdValue(uint256 amount) public {
+        amount = bound(amount, 1e8, type(uint128).max);
+
+        vm.prank(ANVIL_ADDRESS);
+        initWethReserve();
+
+        uint256 expectedUsdValue = amount * 2000;
+        uint256 usdValue = pool.getUsdValue(netConfig.weth, amount);
+        assertEq(expectedUsdValue, usdValue);
+    }
+
+    function testGetTokenAmountFromUsd(uint256 usdAmount) public {
+        usdAmount = bound(usdAmount, 1e8, type(uint128).max);
+
+        vm.prank(ANVIL_ADDRESS);
+        initWethReserve();
+
+        uint256 expectedWeth = usdAmount / 2000;
+        uint256 amountWeth = pool.getTokenAmountFromUsd(netConfig.weth, usdAmount);
+        assertEq(expectedWeth, amountWeth);
+    }
+
+    ////////////////////////////////////
+    // Transfer Liquidity Token Tests //
+    ////////////////////////////////////
+    function testTransferLiquidityTokenRevertsIfReserveInActiveOrZeroAmntOrNotEnoughBalanceOrHFIsBad() public {
+        vm.startPrank(ANVIL_ADDRESS);
+        initWethReserve();
+        initWbtcReserve();
+        pool.updateReserveActive(netConfig.weth, false);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__ReserveInactive.selector);
+        pool.transferLiquidityToken(netConfig.weth, user2, AMOUNT);
+        vm.stopPrank();
+
+        vm.prank(ANVIL_ADDRESS);
+        pool.updateReserveActive(netConfig.weth, true);
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__NeedsMoreThanZero.selector);
+        pool.transferLiquidityToken(netConfig.weth, user2, 0);
+
+        vm.expectRevert(ValidationLogic.ValidationLogic__UserHasNotEnoughBalance.selector);
+        pool.transferLiquidityToken(netConfig.weth, user2, AMOUNT);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        mintAndApprove(netConfig.weth, user2, AMOUNT);
+        pool.supply(netConfig.weth, AMOUNT, user2);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        mintAndApprove(netConfig.wbtc, user, AMOUNT);
+        pool.supply(netConfig.wbtc, AMOUNT, user);
+        pool.setUseAsCollateral(netConfig.wbtc, true);
+
+        pool.borrow(netConfig.weth, 1);
+
+        vm.expectRevert(ValidationLogic.ValidationLogic__BreaksHealthFactor.selector);
+        pool.transferLiquidityToken(netConfig.wbtc, user2, AMOUNT);
+        vm.stopPrank();
+    }
+
+    function testTransferLiquidityToken(uint256 amount) public {
+        amount = bound(amount, 1e8, type(uint128).max);
+
+        vm.startPrank(ANVIL_ADDRESS);
+        initWethReserve();
+        initWbtcReserve();
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        mintAndApprove(netConfig.weth, user2, amount);
+        pool.supply(netConfig.weth, amount, user2);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        pool.transferLiquidityToken(netConfig.weth, user, amount);
+        vm.stopPrank();
+
+        assertEq(amount, lTokenWeth.balanceOf(user));
+        assertEq(0, lTokenWeth.balanceOf(user2));
+    }
+
+    ////////////////////////////
+    // Liquidation Call Tests //
+    ////////////////////////////
+    function liquidationCallPrepare(uint256 amount) internal {
+        vm.startPrank(ANVIL_ADDRESS);
+        initWethReserve();
+        initWbtcReserve();
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        mintAndApprove(netConfig.weth, user, amount);
+        pool.supply(netConfig.weth, amount, user);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        mintAndApprove(netConfig.wbtc, user2, amount);
+        pool.supply(netConfig.wbtc, amount, user2);
+        pool.setUseAsCollateral(netConfig.wbtc, true);
+        pool.borrow(netConfig.weth, amount);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 20 days);
+        MockV3Aggregator(netConfig.wethFeed.priceFeedAddress)
+            .updateRoundData(2, 10000e8, block.timestamp, block.timestamp);
+        MockV3Aggregator(netConfig.wbtcFeed.priceFeedAddress)
+            .updateRoundData(2, 10000e8, block.timestamp, block.timestamp);
+    }
+
+    function testLiquidationCallRevertsIfReservesAreInActiveOrNotUsingAsCollateralOrNoDebtOrUserHFIsNotBad() public {
+        vm.startPrank(ANVIL_ADDRESS);
+        initWethReserve();
+        initWbtcReserve();
+        pool.updateReserveActive(netConfig.weth, false);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__ReserveInactive.selector);
+        pool.liquidationCall(netConfig.weth, netConfig.wbtc, user2, AMOUNT, false);
+        vm.stopPrank();
+
+        vm.prank(ANVIL_ADDRESS);
+        pool.updateReserveActive(netConfig.wbtc, false);
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__ReserveInactive.selector);
+        pool.liquidationCall(netConfig.weth, netConfig.wbtc, user2, AMOUNT, false);
+        vm.stopPrank();
+
+        vm.startPrank(ANVIL_ADDRESS);
+        pool.updateReserveActive(netConfig.weth, true);
+        pool.updateReserveActive(netConfig.wbtc, true);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__NotUsingAsCollateral.selector);
+        pool.liquidationCall(netConfig.weth, netConfig.wbtc, user2, AMOUNT, false);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        mintAndApprove(netConfig.weth, user2, AMOUNT);
+        pool.supply(netConfig.weth, AMOUNT, user2);
+        pool.setUseAsCollateral(netConfig.weth, true);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__NoDebtOfSelectedType.selector);
+        pool.liquidationCall(netConfig.weth, netConfig.wbtc, user2, AMOUNT, false);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        mintAndApprove(netConfig.wbtc, user, AMOUNT);
+        pool.supply(netConfig.wbtc, AMOUNT, user);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        pool.setUseAsCollateral(netConfig.weth, true);
+        pool.borrow(netConfig.wbtc, AMOUNT / 63);
+        vm.stopPrank();
+
+        vm.startPrank(user);
+        vm.expectRevert(ValidationLogic.ValidationLogic__HealthFactorNotBelowThreshold.selector);
+        pool.liquidationCall(netConfig.weth, netConfig.wbtc, user2, AMOUNT, false);
+        vm.stopPrank();
+    }
+
+    function testLiquidationCallTrue(uint256 amount) public {
+        amount = bound(amount, 1e8, type(uint128).max);
+
+        liquidationCallPrepare(amount);
+
+        vm.startPrank(user);
+        mintAndApprove(netConfig.weth, user, amount);
+        vm.expectEmit(true, true, true, true);
+        emit LiquidationCall(netConfig.wbtc, netConfig.weth, user2, user, amount / 2, amount, true);
+        pool.liquidationCall(netConfig.wbtc, netConfig.weth, user2, amount, true);
+        vm.stopPrank();
+    }
+
+    function testLiquidationCallFalse(uint256 amount) public {
+        amount = bound(amount, 1e8, type(uint128).max);
+
+        liquidationCallPrepare(amount);
+
+        vm.startPrank(user);
+        mintAndApprove(netConfig.weth, user, amount);
+        vm.expectEmit(true, true, true, true);
+        emit LiquidationCall(netConfig.wbtc, netConfig.weth, user2, user, amount / 2, amount, false);
+        pool.liquidationCall(netConfig.wbtc, netConfig.weth, user2, amount, false);
+        vm.stopPrank();
     }
 }
